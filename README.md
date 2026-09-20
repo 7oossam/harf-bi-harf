@@ -5,7 +5,7 @@ rows each one joins, and a row that spells a real word can be sealed for points.
 you reshape a ten-letter bag, write roots into a notebook, level up word patterns, and buy relics
 that break the rules.
 
-- **Play:** https://USERNAME.github.io/harf-bi-harf/ (set after the first deploy)
+- **Play:** https://7oossam.github.io/harf-bi-harf/
 - **Stack:** Vite + TypeScript, no game engine — the DOM handles Arabic shaping and RTL best.
 - **Dictionary:** ~432,000 real Arabic word forms with roots, built from OpenSubtitles frequency
   data, Hunspell, the Arramooz lexicon and Qutrub verb conjugations. See `CLAUDE.md`.
@@ -20,6 +20,7 @@ npm run dev
 
 ## Deploy
 
-Push to `main`; GitHub Actions builds and publishes to GitHub Pages.
+Push to `main`; GitHub Actions builds and publishes the site to the `gh-pages` branch, which
+GitHub Pages serves. `gh-pages` is generated — never commit to it by hand.
 For an Android APK, run the "Build Android APK" workflow from the Actions tab and download the
 artifact — no local Android tooling needed.

@@ -1,42 +1,49 @@
 name: Deploy to GitHub Pages
 
+# The site is served from the gh-pages branch. It does not use actions/configure-pages:
+# the default GITHUB_TOKEN is not allowed to create a Pages site ("Resource not accessible
+# by integration"), so that path needs a repo admin to enable Pages by hand first. Pushing
+# a gh-pages branch makes GitHub enable and serve Pages on its own.
+
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
       - run: npm ci
       - run: npm run build
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Publish dist to gh-pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin gh-pages
+          git worktree add -B gh-pages ghp origin/gh-pages
+          find ghp -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -r dist/. ghp/
+          touch ghp/.nojekyll
+          cd ghp
+          git add -A
+          if git diff --staged --quiet; then
+            echo "Build output unchanged; nothing to deploy."
+          else
+            git commit -m "Deploy ${GITHUB_SHA}"
+            git push origin gh-pages
+          fi

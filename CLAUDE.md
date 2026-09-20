@@ -17,7 +17,12 @@ npm run typecheck# tsc --noEmit (not part of the build; build uses esbuild and i
 npx cap sync     # copy the web build into android/ and ios/
 ```
 
-Deploy: push to `main`. `.github/workflows/deploy.yml` builds and publishes to GitHub Pages.
+Deploy: push to `main`. `.github/workflows/deploy.yml` builds and commits `dist/` onto the
+`gh-pages` branch, which GitHub Pages serves at https://7oossam.github.io/harf-bi-harf/.
+It deliberately does **not** use `actions/configure-pages`: the default `GITHUB_TOKEN` cannot
+create a Pages site (`Resource not accessible by integration`), so that route needs a repo
+admin to enable Pages in Settings first. Pushing a `gh-pages` branch enables Pages by itself.
+`gh-pages` is generated output — never commit to it by hand.
 An APK can be built without any local Android tooling: run the **Build Android APK** workflow
 from the Actions tab and download the artifact.
 
