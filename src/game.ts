@@ -1,5 +1,5 @@
 import { loadDict, norm, IDX, DISP, ROOTS, SORTED, isAlive, isWord, hasAl, displayOf, rootOf, spaced } from './dict';
-import { VAL, LETTERS, FAM, famOf, LENB, TARGETS, BOSS_ROUNDS, DROPS, BURNS, LINE_MAX, BAG_CAP, NB_SLOTS, STARTERS, PATTERNS, patOf, RELICS, ROWMODS, BOSSES, ENCH } from './data';
+import { VAL, LETTERS, FAM, famOf, LENB, TARGETS, BOSS_ROUNDS, DROPS, BURNS, LINE_MAX, BAG_CAP, NB_SLOTS, STARTERS, PATTERNS, patOf, RELICS, ROWMODS, BOSSES, ENCH, PATHS, pathLvl } from './data';
 
 /* ================= STATE ================= */
 let S=null, uid=1;
@@ -13,11 +13,21 @@ const nbSlots=()=>has('inkwell')?4:NB_SLOTS;
 const nbOf=root=>root?S.notebook.find(n=>n.root===root):null;
 const nbLetters=()=>{const s=new Set(); S.notebook.forEach(n=>[...n.root].forEach(c=>s.add(c))); return s;};
 
+/* ================= PATHS (BUILDS) ================= */
+const pathLevelOf=id=>pathLvl(PATHS.find(p=>p.id===id).progress(S,has));
+const pathStats=()=>PATHS.map(p=>({id:p.id,n:p.n,c:p.c,d:p.d,lvl:pathLevelOf(p.id)}));
+const leadingPath=()=>{let best=null,bl=0; for(const p of PATHS){const lv=pathLevelOf(p.id); if(lv>bl){bl=lv;best=p.id;}} return best;};
+function pathFeedback(id){
+  if(!id) return;
+  const p=PATHS.find(x=>x.id===id), lv=pathLevelOf(id);
+  if(lv>0) setTimeout(()=>toast(`<b style="color:${p.c}">${p.n}</b> الآن م${lv}`),550);
+}
+
 function newRun(starter){
   const st=STARTERS.find(x=>x.id===starter);
   S={phase:'intro',round:1,gold:4,bag:[...st.letters].map(ch=>({id:uid++,ch,ench:null})),relics:[],
-     rowMods:[null,null,null,null],notebook:[{root:st.root,lvl:1,xp:0}],patLv:{},permMult:0,seenRoots:{},
-     burnsMax:BURNS,dropsMax:DROPS,stats:{words:0,best:null,total:0},mute:S?S.mute:false,starter:st.n};
+     rowMods:[null,null,null,null],notebook:[{root:st.root,lvl:1,xp:0}],patLv:{},permMult:0,seenRoots:{},seenPatterns:{},
+     burnsMax:BURNS,dropsMax:DROPS,stats:{words:0,best:null,total:0,maxChain:0},mute:S?S.mute:false,starter:st.n};
   startRound();
 }
 function startRound(){
@@ -91,6 +101,11 @@ function scoreWord(tiles,s,row){
   if(has('reader')){ const seen=Object.keys(S.seenRoots).length+(root&&!S.seenRoots[root]?1:0); add+=.25*seen; }
   if(add>0){ mult+=add; tags.push('دائم +'+fmt(add)); }
   if(root){const prev=S.rootCounts[root]||0; if(prev>0){x*=(1+prev); tags.push('رنين ×'+(1+prev));}}
+  const bagFlavor=tiles.some(t=>t.ench)||S.bag.length<=7, pctx={nb,p,chain:S.chain,bagFlavor};
+  for(const path of PATHS){
+    const lv=pathLvl(path.progress(S,has));
+    if(lv>0&&path.match(pctx)){ const b=.15*lv; x*=1+b; tags.push('مسار '+path.n+' م'+lv+' +'+Math.round(b*100)+'٪'); }
+  }
   if(S.chain>0){const m=1+.5*S.chain; x*=m; tags.push('سلسلة ×'+fmt(m));}
   const glass=tiles.filter(t=>t.ench==='glass').length; if(glass){x*=2**glass; tags.push('زجاج ×'+(2**glass));}
   const mod=S.rowMods[row];
@@ -99,7 +114,7 @@ function scoreWord(tiles,s,row){
   if(mod==='long'&&len>=5){x*=3;tags.push('طِوال ×٣');}
   if(has('orphan')&&S.bag.length<=7){x*=3;tags.push('يتيم ×٣');}
   if(S.boss&&S.boss.id==='rhyme'&&S.lastEnd&&s[0]!==S.lastEnd){x*=.5;tags.push('بلا قافية ×½');}
-  return {chips,mult:mult*x,score:Math.round(chips*mult*x),tags,root};
+  return {chips,mult:mult*x,score:Math.round(chips*mult*x),tags,root,pat:p?p.id:null};
 }
 const fmt=n=>(+(+n).toFixed(2)).toString();
 
@@ -109,7 +124,7 @@ function drop(i,atStart){
   if(S.phase!=='play'||i>=nLines()) return;
   if(S.lock[i]>0){ toast('هذا السطر جافّ الآن'); return; }
   const tile=S.cur; audio('drop');
-  if(!S.sealedSinceDrop) S.chain=0;
+  if(!S.sealedSinceDrop) S.chain=has('ember')?Math.max(0,S.chain-1):0;
   S.sealedSinceDrop=false;
   if(S.junk[i]){ if(S.lines[i].length<LINE_MAX) S.lines[i]=[...S.lines[i],tile]; }
   else {
@@ -168,7 +183,8 @@ function seal(i,auto){
     const nb=nbOf(r.root);
     if(nb){ nb.xp+=has('inkwell')?2:1; if(nb.xp>=3){nb.xp-=3; nb.lvl++; setTimeout(()=>toast(`ارتقى الجذر <b>${spaced(nb.root)}</b> إلى المستوى ${nb.lvl}`),700);} }
   }
-  S.chain++; S.sealedSinceDrop=true; S.lastEnd=s[s.length-1];
+  if(has('collector')&&r.pat&&!S.seenPatterns[r.pat]){ S.seenPatterns[r.pat]=1; S.permMult+=.5; setTimeout(()=>toast('جامع الأوزان: أول كلمة على وزن جديد · +٠٫٥ مضاعف دائم'),650); }
+  S.chain++; S.stats.maxChain=Math.max(S.stats.maxChain||0,S.chain); S.sealedSinceDrop=true; S.lastEnd=s[s.length-1];
   if(S.rowMods[i]==='gold') S.gold+=2;
   tiles.filter(t=>t.ench==='glass'&&t.id).forEach(t=>{S.bag=S.bag.filter(b=>b.id!==t.id);});
   if(has('ring')) S.top=[...tiles.filter(t=>!t.heavy).map(t=>({...t})),...S.top];
@@ -209,21 +225,27 @@ function winRound(){
   S.phase='roundwon'; render();
 }
 function writeRoot(root){
-  if(S.notebook.length<nbSlots()){ S.notebook.push({root,lvl:1,xp:0}); S.nbOffer=null; audio('seal',2); openShop(); }
+  if(S.notebook.length<nbSlots()){ S.notebook.push({root,lvl:1,xp:0}); S.nbOffer=null; audio('seal',2); pathFeedback('root'); openShop(); }
   else { S.nbReplace=root; render(); }
 }
-function replaceRoot(idx){ S.notebook[idx]={root:S.nbReplace,lvl:1,xp:0}; S.nbReplace=null; S.nbOffer=null; audio('seal',2); openShop(); }
+function replaceRoot(idx){ S.notebook[idx]={root:S.nbReplace,lvl:1,xp:0}; S.nbReplace=null; S.nbOffer=null; audio('seal',2); pathFeedback('root'); openShop(); }
 
 /* ================= SHOP ================= */
-function openShop(){ S.phase='shop'; S.shop={offers:genOffers(),reroll:2,removed:false}; render(); }
+function openShop(){ S.phase='shop'; S.shop={offers:genOffers(),reroll:2,removed:false,lead:leadingPath()}; render(); }
 function genOffers(){
-  const pool=Object.keys(RELICS).filter(r=>!S.relics.includes(r)); shuffle(pool);
-  const o=pool.slice(0,2).map(r=>({k:'relic',id:r,cost:6}));
+  const lead=leadingPath();
+  const pool=Object.keys(RELICS).filter(r=>!S.relics.includes(r));
+  const matched=pool.filter(r=>RELICS[r].path===lead), other=pool.filter(r=>RELICS[r].path!==lead);
+  shuffle(matched); shuffle(other);
+  const relicPool=lead?[...matched,...other]:shuffle(pool);
+  const o=relicPool.slice(0,2).map(r=>({k:'relic',id:r,cost:6,path:RELICS[r].path}));
   o.push({k:'letters',cost:3,opts:letterOpts()});
-  o.push({k:'row',id:pick(Object.keys(ROWMODS)),cost:4});
-  if(Math.random()<.5&&S.notebook.length){ o.push({k:'nbup',root:pick(S.notebook).root,cost:3}); }
-  else o.push({k:'patup',id:pick(PATTERNS.filter(p=>p.id!=='thulathi')).id,cost:3});
-  o.push({k:'ench',id:pick(Object.keys(ENCH)),cost:4});
+  const rid=pick(Object.keys(ROWMODS));
+  o.push({k:'row',id:rid,cost:4,path:ROWMODS[rid].path});
+  const wantNb=lead==='root'||(lead!=='pattern'&&Math.random()<.5&&S.notebook.length);
+  if(wantNb&&S.notebook.length){ o.push({k:'nbup',root:pick(S.notebook).root,cost:3,path:'root'}); }
+  else o.push({k:'patup',id:pick(PATTERNS.filter(p=>p.id!=='thulathi')).id,cost:3,path:'pattern'});
+  o.push({k:'ench',id:pick(Object.keys(ENCH)),cost:4,path:'bag'});
   return o;
 }
 function letterOpts(){
@@ -234,9 +256,9 @@ function letterOpts(){
 }
 function buy(idx){
   const o=S.shop.offers[idx]; if(!o||o.sold||S.gold<o.cost) return;
-  if(o.k==='relic'){ if(S.relics.length>=5){toast('معك ٥ طلاسم، وهذا الحد');return;} S.relics.push(o.id); pay(o); }
-  else if(o.k==='nbup'){ const nb=nbOf(o.root); if(nb) nb.lvl++; pay(o); }
-  else if(o.k==='patup'){ S.patLv[o.id]=(S.patLv[o.id]||1)+1; pay(o); }
+  if(o.k==='relic'){ if(S.relics.length>=5){toast('معك ٥ طلاسم، وهذا الحد');return;} S.relics.push(o.id); pay(o); pathFeedback(o.path); }
+  else if(o.k==='nbup'){ const nb=nbOf(o.root); if(nb) nb.lvl++; pay(o); pathFeedback('root'); }
+  else if(o.k==='patup'){ S.patLv[o.id]=(S.patLv[o.id]||1)+1; pay(o); pathFeedback('pattern'); }
   else if(o.k==='ench') S.picker={mode:'ench',ench:o.id,idx};
   else if(o.k==='letters') S.picker={mode:'letters',idx};
   else if(o.k==='row') S.picker={mode:'row',mod:o.id,idx};
@@ -246,7 +268,7 @@ function pay(o){S.gold-=o.cost;o.sold=true;}
 function pickTile(id){
   const p=S.picker; const o=p.idx!=null?S.shop.offers[p.idx]:null;
   const t=S.bag.find(b=>b.id===id); if(!t) return;
-  if(p.mode==='ench'){ if(p.ench==='ink'&&!famOf(t.ch)){toast('الحبر يحتاج حرفًا له عائلة نقاط');return;} t.ench=p.ench; pay(o); }
+  if(p.mode==='ench'){ if(p.ench==='ink'&&!famOf(t.ch)){toast('الحبر يحتاج حرفًا له عائلة نقاط');return;} t.ench=p.ench; pay(o); pathFeedback('bag'); }
   else if(p.mode==='remove'){ if(S.bag.length<=4){toast('لا يقل الكيس عن ٤ حروف');return;} S.bag=S.bag.filter(b=>b.id!==id); S.gold-=2; S.shop.removed=true; }
   else if(p.mode==='replace'){ t.ch=p.ch; t.ench=null; pay(o); }
   S.picker=null; audio('seal',1); render();
@@ -256,7 +278,7 @@ function pickLetter(ch){
   if(S.bag.length>=bagCap()){ S.picker={mode:'replace',ch,idx:S.picker.idx}; render(); return; }
   S.bag.push({id:uid++,ch,ench:null}); pay(o); S.picker=null; audio('seal',1); render();
 }
-function pickRow(r){ const o=S.shop.offers[S.picker.idx]; S.rowMods[r]=S.picker.mod; pay(o); S.picker=null; audio('seal',1); render(); }
+function pickRow(r){ const o=S.shop.offers[S.picker.idx]; S.rowMods[r]=S.picker.mod; pay(o); S.picker=null; audio('seal',1); pathFeedback(o.path); render(); }
 function reroll(){ if(S.gold<S.shop.reroll) return; S.gold-=S.shop.reroll; S.shop.reroll++; S.shop.offers=genOffers(); render(); }
 function nextRound(){ S.round++; startRound(); render(); }
 
@@ -286,12 +308,15 @@ function render(){
   const pct=Math.min(100,S.score/S.target*100);
   const chainM=1+.5*S.chain;
   const nbHTML=Array.from({length:nbSlots()},(_,k)=>{const e=S.notebook[k]; return e?`<span class="nb">${spaced(e.root)}<small>م${e.lvl} · ${e.xp}/3</small></span>`:'<span class="nb empty">فارغ</span>';}).join('');
+  const ps=pathStats(), lead=leadingPath();
+  const pathsHTML=ps.map(p=>`<button class="pathchip ${p.id===lead?'lead':''}" data-path="${p.id}" style="--pc:${p.c}">${p.n}<b>${p.lvl>0?'م'+p.lvl:'—'}</b></button>`).join('');
   let h=`<div class="top">
     <div class="rnd">الجولة<b>${S.round} / ${TARGETS.length}</b>${S.boss?`<span class="boss">${BOSSES[S.boss.id].n}</span>`:''}</div>
     <div class="prog"><div class="nums"><b>${S.score}</b><span>الهدف ${S.target}</span></div><div class="bar"><i style="width:${pct}%"></i></div></div>
     <div class="res"><div class="pill"><small>إسقاطات</small><b>${S.drops}</b></div><div class="pill gold"><small>دنانير</small><b>${S.gold}</b></div></div>
   </div>
   <div class="strip"><span class="lab">الدفتر</span>${nbHTML}</div>
+  <div class="strip paths"><span class="lab">مسارك</span>${pathsHTML}</div>
   <div class="strip">${S.relics.length?S.relics.map(r=>`<button class="relic" data-relic="${r}">${RELICS[r].n}</button>`).join(''):'<span class="none">لا طلاسم بعد</span>'}</div>
   <div class="meta"><span class="chain ${S.chain>=2?'hot':''}">${S.chain>0?`سلسلة ${S.chain} · ×${fmt(chainM)}`:'اختم على التوالي لتبني سلسلة'}</span>
     <span>${S.boss&&S.boss.id==='rhyme'&&S.lastEnd?`<span class="bossnote">ابدأ بـ«${S.lastEnd}»</span> · `:''}<button class="linkbtn" data-act="book">الأوزان والكيس</button></span></div>
@@ -354,8 +379,10 @@ function renderOverlay(){
   } else if(P==='starters'){
     o=`<div class="card"><h2>اختر كيسك الأول</h2><div class="choice">${STARTERS.map(s=>`<button data-starter="${s.id}"><b>${s.n}</b><span class="letters">${[...s.letters].join(' ')}</span><span>يبدأ دفترك بجذر ${spaced(s.root)}. ${s.d}</span></button>`).join('')}</div></div>`;
   } else if(P==='intro'){
+    const lid=leadingPath(), lp=lid?PATHS.find(x=>x.id===lid):null;
     o=`<div class="card"><h2>الجولة ${S.round}</h2>
       <div class="kv"><div><span>الهدف</span><b>${S.target}</b></div><div><span>الإسقاطات</span><b>${S.dropsMax}</b></div><div><span>الحرق</span><b>${S.burnsMax}</b></div><div><span>حروف الكيس</span><b>${S.bag.length}</b></div></div>
+      ${lp?`<div class="pathnote" style="--pc:${lp.c}">مسارك الآن: <b>${lp.n}</b> · م${pathLevelOf(lid)}</div>`:''}
       ${S.boss?`<div class="bosscard"><b>الزعيم: ${BOSSES[S.boss.id].n}</b><p>${BOSSES[S.boss.id].d}</p></div>`:''}
       <button class="btn" data-act="go">ابدأ</button></div>`;
   } else if(P==='roundwon'){
@@ -395,18 +422,22 @@ function renderOverlay(){
         <button class="btn" data-act="next">الجولة ${S.round+1}</button></div>`;
     }
   } else if(P==='book'){
+    const lead=leadingPath();
     o=`<div class="card"><h2>كيسك · ${S.bag.length} من ${bagCap()}</h2>${bagGrid(false)}
       <h3>الدفتر</h3><div class="kv">${S.notebook.map(x=>`<div><span>${spaced(x.root)}</span><b>م${x.lvl} · +${5*x.lvl} نقاط +${x.lvl} مضاعف</b></div>`).join('')}</div>
       <h3>الأوزان</h3><div class="pat">${PATTERNS.map(p=>{const lv=S.patLv[p.id]||1; return `<div><b>${p.n}</b>م${lv} · +${Math.round(p.c*(1+.5*(lv-1)))} نقاط +${p.m+lv-1} مضاعف</div>`;}).join('')}</div>
+      <h3>المسارات</h3><div class="pathsgrid">${pathStats().map(p=>`<div style="--pc:${p.c}" class="${p.id===lead?'lead':''}"><b>${p.n}${p.lvl>0?' · م'+p.lvl+' · +'+Math.round(p.lvl*15)+'٪':''}</b><small>${p.d}</small></div>`).join('')}</div>
       ${S.permMult?`<p class="sub">مضاعف دائم: +${fmt(S.permMult)}</p>`:''}
       ${S.rowMods.slice(0,nLines()).some(Boolean)?`<h3>نقوش السطور</h3><div class="kv">${S.rowMods.slice(0,nLines()).map((m,r)=>`<div><span>السطر ${r+1}</span><b>${m?ROWMODS[m].n:'—'}</b></div>`).join('')}</div>`:''}
       <button class="btn ghost" data-act="closebook">رجوع</button></div>`;
   } else if(P==='over'||P==='victory'){
     saveBest();
     const v=P==='victory';
+    const lid=leadingPath(), lp=lid?PATHS.find(x=>x.id===lid):null;
     o=`<div class="card"><h2>${v?'اكتملت الرحلة':'جفّ الحبر'}</h2>
       <p class="sub">${v?'عبرت الجولات الثماني كلها.':`وصلت إلى الجولة ${S.round}، ونقاطك ${S.score} من ${S.target}.`}</p>
       <div class="kv"><div><span>كلمات مختومة</span><b>${S.stats.words}</b></div><div><span>مجموع النقاط</span><b>${S.stats.total}</b></div>${S.stats.best?`<div><span>أغلى كلمة</span><b>${S.stats.best.w} · ${S.stats.best.score}</b></div>`:''}
+      ${lp?`<div><span>مسارك</span><b style="color:${lp.c}">${lp.n} · م${pathLevelOf(lid)}</b></div>`:''}
       <div><span>الدفتر</span><b>${S.notebook.map(x=>spaced(x.root)+' م'+x.lvl).join('، ')}</b></div>
       <div><span>الطلاسم</span><b>${S.relics.map(r=>RELICS[r].n).join('، ')||'—'}</b></div></div>
       <button class="btn" data-act="restart">رحلة جديدة</button></div>`;
@@ -421,8 +452,11 @@ function offerHTML(x,i){
   else if(x.k==='row'){kind='نقش سطر';nm='سطر '+ROWMODS[x.id].n;ds=ROWMODS[x.id].d;cls='k-row';}
   else if(x.k==='nbup'){kind='حبر';nm='ارفع جذر '+spaced(x.root);ds='+١ مستوى لهذا الجذر في دفترك.';cls='k-up';}
   else {const p=PATTERNS.find(q=>q.id===x.id);kind='ميزان';nm='ارفع وزن '+p.n;ds=`+١ مستوى: نقاط ومضاعف أعلى لكل كلمة على وزن ${p.n}.`;cls='k-up';}
-  return `<button class="offer ${cls} ${x.sold?'sold':''}" data-buy="${i}" ${S.gold<x.cost?'disabled':''}>
-    <span class="kind">${kind}</span><span class="nm">${nm}</span><span class="ds">${ds}</span><span class="pr">${x.sold?'بيع':x.cost+' دينار'}</span></button>`;
+  const path=x.path?PATHS.find(p=>p.id===x.path):null;
+  const serves=path&&S.shop&&x.path===S.shop.lead;
+  const pathTag=path?`<span class="pathtag" style="--pc:${path.c}">${path.n}${serves?' ✓ يخدم مسارك':''}</span>`:'';
+  return `<button class="offer ${cls} ${serves?'serves':''} ${x.sold?'sold':''}" data-buy="${i}" ${S.gold<x.cost?'disabled':''}>
+    <span class="kind">${kind}</span><span class="nm">${nm}</span><span class="ds">${ds}</span>${pathTag}<span class="pr">${x.sold?'بيع':x.cost+' دينار'}</span></button>`;
 }
 function saveBest(){ try{const b=+localStorage.getItem('harf-best')||0; if(S.stats.total>b) localStorage.setItem('harf-best',S.stats.total);}catch(e){} }
 
@@ -453,7 +487,7 @@ function audio(kind,lvl=0){
 
 let prevPhase='play';
 document.addEventListener('click',e=>{
-  const b=e.target.closest('[data-seal],[data-act],[data-buy],[data-pick],[data-letter],[data-relic],[data-mod],[data-start],[data-line],[data-starter],[data-write],[data-replace],[data-row]');
+  const b=e.target.closest('[data-seal],[data-act],[data-buy],[data-pick],[data-letter],[data-relic],[data-mod],[data-start],[data-line],[data-starter],[data-write],[data-replace],[data-row],[data-path]');
   if(!b||!S) return;
   const D=b.dataset;
   if(D.seal!=null) return seal(+D.seal);
@@ -466,6 +500,7 @@ document.addEventListener('click',e=>{
   if(D.replace!=null) return replaceRoot(+D.replace);
   if(D.relic){ const r=RELICS[D.relic]; return toast(`<b>${r.n}</b> — ${r.d}`); }
   if(D.mod){ const m=ROWMODS[D.mod]; return toast(`<b>سطر ${m.n}</b> — ${m.d}`); }
+  if(D.path){ const p=PATHS.find(x=>x.id===D.path), lv=pathLevelOf(D.path); return toast(`<b style="color:${p.c}">${p.n}</b>${lv>0?' · م'+lv:''} — ${p.d}`); }
   if(D.start!=null) return drop(+D.start,true);
   if(D.line!=null) return drop(+D.line,false);
   const a=D.act;

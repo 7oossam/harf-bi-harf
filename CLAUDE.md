@@ -57,15 +57,26 @@ spelling; matching uses the normalized form.
 Rebuilding needs Python deps (`spylls`, `nltk`, `arramooz-pysqlite`, `libqutrub`) and the raw
 source files, which are not committed. See the header of each tool.
 
-## Design state (as of the port)
+## Design state
 
 Working: the drop/seal loop, colored row hints, roots × patterns scoring, notebook roots,
-row inscriptions, 15 relics, 6 bosses, the shop, and the 10-letter bag.
+row inscriptions, 17 relics, 6 bosses, the shop, the 10-letter bag, and four named **Paths**
+(`PATHS` in `data.ts`) — الجذر (notebook/resonance), الوزن (patterns), السلسلة (chain), الكيس
+(bag/enchants). A path's level is computed live from what you already own (notebook levels,
+pattern levels, max chain reached, enchanted letters/small bag), not chosen from a menu. Words
+matching a path's condition get an extra multiplier (`x *= 1 + .15*level`) that stacks with
+resonance/chain/row-mods in the same multiplicative tier — this is the "synergies multiply"
+fix. The leading path is shown as a badge strip under the notebook, on the round-intro card,
+and at run end; the shop (`genOffers`) biases its relic pool and tags offers ("✓ يخدم مسارك")
+toward the leading path, and `pathFeedback()` toasts the path + level after a purchase feeds
+it — that's the "direction/payoff" fix. Two new relics (`collector`, `ember`) exist purely to
+give the pattern and chain paths a build-defining hook, mirroring the bag path's `orphan` and
+the root path's `inkwell`.
 
 **Known gaps — the next work:**
-- Buying a letter or writing a root gives no visible direction and no felt payoff.
-- Synergies are thin; there are no distinct, recognizable builds yet.
 - Round targets past round 1 are guesses, never tested.
+- Path level thresholds (`pathLvl`: level = floor(progress/3), cap 5) and the +15%/level bonus
+  are first-pass numbers — re-tune after a bot simulation once one exists.
 
 When changing scoring, re-run a bot simulation before trusting the numbers (an early one lives
 in the session history: a greedy bot averaged ~270 per 20-drop round pre-notebook).
