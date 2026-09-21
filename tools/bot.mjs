@@ -86,7 +86,9 @@ for (let run = 0; run < RUNS; run++) {
       let k = cls.findIndex(c => c.includes('h-word'));
       if (k < 0) k = cls.findIndex(c => c.includes('h-alive'));
       if (k < 0) k = cls.findIndex(c => c.includes('h-dead') || c.includes('h-bounce'));
-      if (k < 0) k = cls.findIndex(c => !c.includes('h-full') && !c.includes('locked') && !c.includes('junk'));
+      // a junk row still takes the drop (and wipes for scrap), so it is a fallback, not a wall
+      if (k < 0) k = cls.findIndex(c => c.includes('h-junk') || c.includes('junk'));
+      if (k < 0) k = cls.findIndex(c => !c.includes('h-full') && !c.includes('locked'));
       if (k < 0) {
         // every row refuses the tile — burn it, and if we cannot, the round cannot advance
         const burn = page.locator('[data-act="burn"]:not([disabled])');
@@ -102,7 +104,7 @@ for (let run = 0; run < RUNS; run++) {
   reached.push(stalled ? 0 : round);
   const peaks = scores.map((v, i) => v == null ? null : `r${i}:${v}`).filter(Boolean).join(' ');
   console.log(`run ${run + 1}: ${stalled ? 'BOT STALLED' : 'reached round ' + round} | peak score per round -> ${peaks}`
-    + (stalled ? `\n   stall: ${stalled}` : '') + (errs.length ? ` (JS errors: ${errs.length})` : ''));
+    + (stalled ? `\n   stall: ${stalled}` : '') + (errs.length ? `\n   JS error: ${errs[0].slice(0, 120)}` : ''));
   await page.close();
 }
 

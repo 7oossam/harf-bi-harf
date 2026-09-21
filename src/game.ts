@@ -148,6 +148,18 @@ const fmt=n=>(+(+n).toFixed(2)).toString();
 
 /* ================= ACTIONS ================= */
 let fx={line:null,kind:null};
+/* Is any action still open to the player? Every row can refuse a tile — locked rows do,
+   and a full row does — so a board of full/locked rows with no burns left is a dead end
+   the round can never leave on its own. Rather than freeze, end the round. */
+function canAct(){
+  if(S.burns>0) return true;
+  for(let i=0;i<nLines();i++){
+    if(S.junk[i]) return true;                                  // junk takes the drop, and wipes for scrap
+    if(S.lock[i]<=0&&S.lines[i].length<lineMax(i)) return true;  // row still accepts a letter
+    if(S.seals>0&&S.lines[i].length>=2&&isWord(lineStr(i))) return true;
+  }
+  return false;
+}
 function drop(i,atStart){
   if(S.phase!=='play'||i>=nLines()) return;
   if(S.lock[i]>0){ toast('هذا السطر جافّ الآن'); return; }
@@ -199,14 +211,16 @@ function cycleDot(){
 function twinSwap(){ if(S.phase!=='play'||!has('twin')||has('fourth')) return; [S.cur,S.next]=[S.next,S.cur]; audio('drop'); render(); }
 function seal(i,auto){
   if(S.phase!=='play') return;
-  if(S.seals<=0){ toast('لم يبق لك ختم في هذه الجولة'); return; }
   const tiles=S.lines[i]; if(!tiles.length) return;
   const s=tiles.map(t=>t.ch).join('');
+  /* Wiping junk is scrap, not a word — it costs no seal. The guard used to sit above this,
+     so once your five seals were gone the «امسح» button still rendered but did nothing. */
   if(S.junk[i]){
     const sc=3*s.length; S.score+=sc; S.lines[i]=[]; S.junk[i]=false; fx={line:i,kind:'sealed'};
     floatAt(i,{score:sc,eq:'حشو: ٣ × '+s.length,tags:[]}); audio('seal',0);
     return afterSeal(auto);
   }
+  if(S.seals<=0){ toast('لم يبق لك ختم في هذه الجولة'); return; }
   if(!isWord(s)) return;
   const r=scoreWord(tiles,s,i);
   S.score+=r.score; S.stats.words++; S.stats.total+=r.score;
@@ -339,6 +353,7 @@ function tileHTML(t,cls=''){
 const HINTLAB={word:'تكتمل هنا',alive:'تبقى حيّة',dead:'ستنكسر',full:'ممتلئ',junk:'حشو',locked:'جافّ',bounce:'سيرتد',jump:'سيقفز'};
 function render(){
   if(!S) return;
+  if(S.phase==='play'&&S.cur&&!canAct()){ endOfDrops(); return; }
   if(!S.bag){ app.innerHTML=''; renderOverlay(); return; }
   const n=nLines();
   const hideNext=has('fourth')||(S.boss&&S.boss.id==='blind');
