@@ -85,6 +85,19 @@ was optimal. Now the round always runs its 20 drops, and beating the target buys
 gradient rather than a cliff. Rows have their own ceilings (`LINE_CAPS` = 4/6/8) so "which row?"
 is a real choice; a full row refuses the drop rather than breaking.
 
+**الرسوخ — the loop that closes.** Sealing used to be a dead end: points, row clears, nothing
+changed. Now every seal inks the radicals of its root (`S.ink`, run-long). At `ROOT_AT` (3) a
+letter **takes root**: `drawPile()` gives it a second entry, so it falls about twice as often.
+Spelling a root makes that root easier to spell again, and the bag drifts into a specialist —
+the build is something the player grows into rather than picks. The cost is real: drifting
+narrow means the round's commissioned wazn may need a letter you now see less.
+
+**Letters are not given invented properties.** Arabic already assigned the one that matters:
+`ZAWAID` (سألتمونيها) marks the ten augment letters that build a وزن onto a root; everything
+else is a radical that carries meaning. `letterTag()` states which, so the shop's "why this
+letter?" has an answer — a زائدة widens the أوزان you can reach, a radical deepens the roots
+you keep spelling. Do not bolt game-stats onto letters; surface what the language already says.
+
 **الأوزان: one per round, not eleven.** `S.wazn` commissions a single pattern each round, shown
 in the head margin and on the round-intro card, and it pays double. `waznHint(i)` scans the
 letters still undrawn and tells a row which one would finish it on that wazn — recall becomes

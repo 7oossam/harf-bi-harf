@@ -13,6 +13,15 @@ export const DROPS=20, BURNS=3, LINE_MAX=8, BAG_CAP=10, NB_SLOTS=3;
    the short row takes quick words, the long row is where you commit to a big one. */
 export const LINE_CAPS=[4,6,8,6];
 
+/* حروف الزيادة — the ten letters Arabic uses to build a وزن onto a root (سألتمونيها,
+   normalised: أ folds into ا). These are the toolkit letters; everything else carries
+   meaning as a radical. The game does not invent properties for letters — the language
+   already assigned them, and this is the one that decides what a letter is *for*. */
+export const ZAWAID=new Set([...'سالتمونيه']);
+/* Seal a root this many times and its radicals take root in your bag: they start falling
+   more often, so what you spell reshapes what you draw. That feedback is the build. */
+export const ROOT_AT=3;
+
 export const STARTERS=[
   {id:'katib',n:'كيس الكاتب',letters:'المكتبونير',root:'كتب',d:'متوازن، كثير الكلمات القصيرة.'},
   {id:'hakim',n:'كيس الحكيم',letters:'الحكمتيسرب',root:'حكم',d:'حروف أثقل قليلًا، وأوزان مثل حاكم وحكيم.'},

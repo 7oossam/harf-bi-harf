@@ -134,6 +134,14 @@ button:focus-visible,.line:focus-visible{outline:2px solid var(--ink);outline-of
 .tile .val{position:absolute;bottom:3px;left:6px;font-family:var(--ui);font-size:11px;opacity:.55}
 .tile.small .val{font-size:9px;bottom:1px;left:3px}
 .tile .nbdot{position:absolute;top:5px;right:6px;width:6px;height:6px;border-radius:50%;background:var(--verdigris)}
+/* a rooted radical is underlined in ochre; an augment letter is marked faintly.
+   The language assigned these — the tile only reports them. */
+.tile.rooted{box-shadow:inset 0 -4px 0 var(--seal)}
+.tile.zaid .val{color:var(--verdigris);opacity:.9}
+.rooted{display:inline-flex;align-items:baseline;gap:4px}
+.rooted .lab{opacity:.7}
+.rooted b{font-family:var(--naskh);font-size:15px;color:var(--seal)}
+.lettertag{display:block;margin-top:5px;font-size:10px;color:var(--ink2);text-align:center;max-width:96px}
 .e-gold{background:var(--seal)!important;color:var(--page)!important}
 .e-glass{background:var(--verdigris)!important;color:var(--page)!important}
 .e-ink{background:var(--lapis)!important;color:var(--page)!important}

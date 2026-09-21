@@ -1,5 +1,5 @@
 import { loadDict, norm, IDX, DISP, ROOTS, SORTED, isAlive, isWord, hasAl, displayOf, rootOf, spaced } from './dict';
-import { VAL, LETTERS, FAM, famOf, LENB, TARGETS, BOSS_ROUNDS, DROPS, BURNS, LINE_MAX, LINE_CAPS, BAG_CAP, NB_SLOTS, STARTERS, PATTERNS, patOf, RELICS, ROWMODS, BOSSES, ENCH, PATHS, pathLvl } from './data';
+import { VAL, LETTERS, FAM, famOf, LENB, TARGETS, BOSS_ROUNDS, DROPS, BURNS, LINE_MAX, LINE_CAPS, ZAWAID, ROOT_AT, BAG_CAP, NB_SLOTS, STARTERS, PATTERNS, patOf, RELICS, ROWMODS, BOSSES, ENCH, PATHS, pathLvl } from './data';
 
 /* ================= STATE ================= */
 let S=null, uid=1;
@@ -11,6 +11,13 @@ const nLines=()=>has('fourth')?4:3;
 const bagCap=()=>has('nasikh')?13:BAG_CAP;
 const nbSlots=()=>has('inkwell')?4:NB_SLOTS;
 const lineMax=i=>LINE_CAPS[i]??LINE_MAX;
+/* الرسوخ: every seal inks the radicals of its root. Ink enough and the letter takes root —
+   it gets a second entry in the draw pile, so it falls about twice as often. Spelling a root
+   makes that root easier to spell again, and the bag quietly becomes a specialist. */
+const inkOf=ch=>S.ink?.[ch]||0;
+const isRooted=ch=>inkOf(ch)>=ROOT_AT;
+const rootedLetters=()=>[...new Set(S.bag.map(t=>t.ch))].filter(isRooted);
+const drawPile=()=>shuffle([...S.bag.map(t=>t.id),...S.bag.filter(t=>isRooted(t.ch)).map(t=>t.id)]);
 const nbOf=root=>root?S.notebook.find(n=>n.root===root):null;
 const nbLetters=()=>{const s=new Set(); S.notebook.forEach(n=>[...n.root].forEach(c=>s.add(c))); return s;};
 
@@ -27,7 +34,7 @@ function pathFeedback(id){
 function newRun(starter){
   const st=STARTERS.find(x=>x.id===starter);
   S={phase:'intro',round:1,gold:4,bag:[...st.letters].map(ch=>({id:uid++,ch,ench:null})),relics:[],
-     rowMods:[null,null,null,null],notebook:[{root:st.root,lvl:1,xp:0}],patLv:{},permMult:0,seenRoots:{},seenPatterns:{},
+     rowMods:[null,null,null,null],notebook:[{root:st.root,lvl:1,xp:0}],patLv:{},permMult:0,seenRoots:{},seenPatterns:{},ink:{},
      burnsMax:BURNS,dropsMax:DROPS,stats:{words:0,best:null,total:0,maxChain:0},mute:S?S.mute:false,starter:st.n};
   startRound();
 }
@@ -36,7 +43,7 @@ function startRound(){
   Object.assign(S,{target:TARGETS[r-1],score:0,drops:S.dropsMax,burns:S.burnsMax,
     lines:[[],[],[],[]],junk:[false,false,false,false],lock:[0,0,0,0],fixed:[0,0,0,0],chain:0,sealedSinceDrop:true,
     rootCounts:{},roundRoots:{},lastEnd:null,dotUses:3,dropCount:0,log:[],top:[],
-    draw:shuffle(S.bag.map(t=>t.id)),boss:null,wazn:pick(PATTERNS.filter(p=>p.id!=='thulathi')).id,phase:'intro',shop:null,picker:null,nbOffer:null});
+    draw:drawPile(),boss:null,wazn:pick(PATTERNS.filter(p=>p.id!=='thulathi')).id,phase:'intro',shop:null,picker:null,nbOffer:null});
   if(BOSS_ROUNDS.includes(r)){
     const pool=r===3?['blind','termite','dry']:r===6?['rhyme','weight','rush']:Object.keys(BOSSES);
     S.boss={id:pick(pool)};
@@ -47,7 +54,7 @@ function startRound(){
 function drawTile(){
   if(S.top.length) return S.top.shift();
   for(let g=0;g<100;g++){
-    if(!S.draw.length) S.draw=shuffle(S.bag.map(t=>t.id));
+    if(!S.draw.length) S.draw=drawPile();
     if(!S.draw.length) break;
     const id=S.draw.pop(); const t=S.bag.find(b=>b.id===id);
     if(t) return {...t};
@@ -201,6 +208,11 @@ function seal(i,auto){
   if(!S.stats.best||r.score>S.stats.best.score) S.stats.best={w:displayOf(s),score:r.score};
   if(r.root){
     S.rootCounts[r.root]=(S.rootCounts[r.root]||0)+1; S.roundRoots[r.root]=(S.roundRoots[r.root]||0)+1; S.seenRoots[r.root]=1;
+    for(const ch of new Set([...r.root])){
+      const was=isRooted(ch); S.ink[ch]=inkOf(ch)+1;
+      if(!was&&isRooted(ch)&&S.bag.some(t=>t.ch===ch))
+        setTimeout(()=>toast(`رسخ <b>${ch}</b> في كيسك — صار يسقط أكثر`),900);
+    }
     const nb=nbOf(r.root);
     if(nb){ nb.xp+=has('inkwell')?2:1; if(nb.xp>=3){nb.xp-=3; nb.lvl++; setTimeout(()=>toast(`ارتقى الجذر <b>${spaced(nb.root)}</b> إلى المستوى ${nb.lvl}`),700);} }
   }
@@ -315,7 +327,8 @@ const app=document.getElementById('app'), ovl=document.getElementById('ovl');
 function tileHTML(t,cls=''){
   if(!t) return `<div class="tile ${cls} hidden">؟</div>`;
   const nbd=S&&S.notebook&&nbLetters().has(t.ch)?'<span class="nbdot"></span>':'';
-  return `<div class="tile ${cls} ${t.ench?'e-'+t.ench:''}">${t.ch}<span class="val">${VAL[t.ch]||1}</span>${nbd}</div>`;
+  const rk=S&&S.ink&&isRooted(t.ch)?' rooted':'', zd=ZAWAID.has(t.ch)?' zaid':'';
+  return `<div class="tile ${cls}${rk}${zd} ${t.ench?'e-'+t.ench:''}">${t.ch}<span class="val">${VAL[t.ch]||1}</span>${nbd}</div>`;
 }
 const HINTLAB={word:'تكتمل هنا',alive:'تبقى حيّة',dead:'ستنكسر',full:'ممتلئ',junk:'حشو',locked:'جافّ',bounce:'سيرتد',jump:'سيقفز'};
 function render(){
@@ -368,6 +381,7 @@ function render(){
   </div>
   <div class="foot">
     ${S.notebook.map(e=>`<span class="nb">${spaced(e.root)}<small>م${e.lvl}</small></span>`).join('')}
+    ${rootedLetters().length?`<span class="rooted"><span class="lab">راسخ</span>${rootedLetters().map(c=>`<b>${c}</b>`).join('')}</span>`:''}
     ${leadP?`<button class="pathchip lead" data-path="${leadP.id}" style="--pc:${leadP.c}">مسار ${leadP.n}<b>م${pathLevelOf(lead)}</b></button>`:''}
     ${S.relics.map(r=>`<button class="relic" data-relic="${r}">${RELICS[r].n}</button>`).join('')}
     ${S.chain>0?`<span class="chain ${S.chain>=2?'hot':''}">سلسلة ${S.chain} ×${fmt(chainM)}</span>`:''}
@@ -376,6 +390,14 @@ function render(){
   </div>`;
   app.innerHTML=h; fx={line:null,kind:null};
   renderOverlay();
+}
+/* Answers "why this letter?" from what the language and the run already know:
+   a زائدة widens which أوزان you can reach, a radical deepens the roots you keep spelling. */
+function letterTag(ch){
+  if(ZAWAID.has(ch)) return 'زائدة — تبني الأوزان';
+  if(isRooted(ch)) return 'راسخ — يسقط أكثر';
+  const k=inkOf(ch);
+  return k?`جذر — رسوخه ${k}/${ROOT_AT}`:'جذر — يحمل المعنى';
 }
 function bagGrid(clickable){
   const tiles=[...S.bag].sort((a,b)=>a.ch.localeCompare(b.ch,'ar'));
@@ -424,7 +446,7 @@ function renderOverlay(){
     if(p&&p.mode==='letters'){
       const o2=sh.offers[p.idx];
       o=`<div class="card"><h2>اختر حرفًا لكيسك</h2><p class="sub">${S.bag.length>=bagCap()?'الكيس ممتلئ: ستختار بعدها حرفًا يُستبدل.':'في كيسك '+S.bag.length+' من '+bagCap()+'.'} النقطة الفيروزية = من حروف جذور دفترك.</p>
-        <div class="letterpick">${o2.opts.map(c=>`<button data-letter="${c}">${tileHTML({ch:c,ench:null},'big')}</button>`).join('')}</div><button class="btn ghost" data-act="cancelpick">رجوع</button></div>`;
+        <div class="letterpick">${o2.opts.map(c=>`<button data-letter="${c}">${tileHTML({ch:c,ench:null},'big')}<small class="lettertag">${letterTag(c)}</small></button>`).join('')}</div><button class="btn ghost" data-act="cancelpick">رجوع</button></div>`;
     } else if(p&&p.mode==='row'){
       o=`<div class="card"><h2>انقش «${ROWMODS[p.mod].n}» على سطر</h2><p class="sub">${ROWMODS[p.mod].d} يحل محل أي نقش سابق.</p>
         <div class="rowpick">${Array.from({length:nLines()},(_,r)=>`<button data-row="${r}">السطر ${r+1}${S.rowMods[r]?' · الآن: '+ROWMODS[S.rowMods[r]].n:' · بلا نقش'}</button>`).join('')}</div>
@@ -447,6 +469,7 @@ function renderOverlay(){
     o=`<div class="card"><h2>كيسك · ${S.bag.length} من ${bagCap()}</h2>${bagGrid(false)}
       <h3>الدفتر</h3><div class="kv">${S.notebook.map(x=>`<div><span>${spaced(x.root)}</span><b>م${x.lvl} · +${5*x.lvl} نقاط +${x.lvl} مضاعف</b></div>`).join('')}</div>
       <h3>الأوزان</h3><div class="pat">${PATTERNS.map(p=>{const lv=S.patLv[p.id]||1; return `<div><b>${p.n}</b>م${lv} · +${Math.round(p.c*(1+.5*(lv-1)))} نقاط +${p.m+lv-1} مضاعف</div>`;}).join('')}</div>
+      <h3>كيسك حرفًا حرفًا</h3><div class="pat">${[...new Set(S.bag.map(t=>t.ch))].sort((a,b)=>inkOf(b)-inkOf(a)).map(c=>`<div><b>${c}</b>${letterTag(c)}</div>`).join('')}</div>
       <h3>المسارات</h3><div class="pathsgrid">${pathStats().map(p=>`<div style="--pc:${p.c}" class="${p.id===lead?'lead':''}"><b>${p.n}${p.lvl>0?' · م'+p.lvl+' · +'+Math.round(p.lvl*15)+'٪':''}</b><small>${p.d}</small></div>`).join('')}</div>
       ${S.permMult?`<p class="sub">مضاعف دائم: +${fmt(S.permMult)}</p>`:''}
       ${S.rowMods.slice(0,nLines()).some(Boolean)?`<h3>نقوش السطور</h3><div class="kv">${S.rowMods.slice(0,nLines()).map((m,r)=>`<div><span>السطر ${r+1}</span><b>${m?ROWMODS[m].n:'—'}</b></div>`).join('')}</div>`:''}
