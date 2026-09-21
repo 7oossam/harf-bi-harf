@@ -33,9 +33,9 @@ from the Actions tab and download the artifact.
 | `src/dict.ts` | dictionary load (fetch + gunzip), normalization, lookups, roots |
 | `src/data.ts` | content tables: letter values, patterns, relics, row mods, bosses, starters |
 | `src/game.ts` | state, actions, scoring, rendering (one module — split further if it grows) |
-| `src/style.css` | all styling, single dark theme (lapis + saffron + turquoise) |
+| `src/style.css` | all styling, single light theme (the manuscript page — see Conventions) |
 | `public/dict.bin` | gzipped dictionary, ~1.4 MB, fetched at boot and cached by the service worker |
-| `tools/` | the pipeline that produces `public/dict.bin` |
+| `tools/` | the pipeline that produces `public/dict.bin`, plus `bot.mjs` (balance sim) |
 
 `game.ts` renders by rebuilding `#app` innerHTML on every change, with delegated click
 handling on `document`. This is fast enough (the board is small) and keeps the state model
@@ -78,13 +78,27 @@ it — that's the "direction/payoff" fix. Two new relics (`collector`, `ember`) 
 give the pattern and chain paths a build-defining hook, mirroring the bag path's `orphan` and
 the root path's `inkwell`.
 
-**Known gaps — the next work:**
-- Round targets past round 1 are guesses, never tested.
-- Path level thresholds (`pathLvl`: level = floor(progress/3), cap 5) and the +15%/level bonus
-  are first-pass numbers — re-tune after a bot simulation once one exists.
+**The seal-or-push rebalance.** The round used to end the instant you crossed the target, and
+unused drops paid gold — so the game paid you to stop playing, and sealing 3-letter words fast
+was optimal. Now the round always runs its 20 drops, and beating the target buys gold instead
+(`winRound`, capped at +8). A broken row pays scrap equal to its letter values, so pushing is a
+gradient rather than a cliff. Rows have their own ceilings (`LINE_CAPS` = 4/6/8) so "which row?"
+is a real choice; a full row refuses the drop rather than breaking.
 
-When changing scoring, re-run a bot simulation before trusting the numbers (an early one lives
-in the session history: a greedy bot averaged ~270 per 20-drop round pre-notebook).
+**الأوزان: one per round, not eleven.** `S.wazn` commissions a single pattern each round, shown
+in the head margin and on the round-intro card, and it pays double. `waznHint(i)` scans the
+letters still undrawn and tells a row which one would finish it on that wazn — recall becomes
+perception, so the player never has to memorise the eleven templates.
+
+**Known gaps — the next work:**
+- Round targets past round 1 are still guesses.
+- Path level thresholds (`pathLvl`: level = floor(progress/3), cap 5) and the +15%/level bonus
+  are first-pass numbers.
+
+When changing scoring, re-run `tools/bot.mjs` before trusting the numbers. Measured 2026-09-21
+after the rebalance: sealing as soon as a word exists (`MINLEN=0`) averages 99 and wins 0/6
+round ones; holding out for 5+ letters (`MINLEN=5`) averages 410 and wins 5/6. Pushing should
+stay clearly ahead — if that gap closes, the gamble is broken again.
 
 ## Conventions
 

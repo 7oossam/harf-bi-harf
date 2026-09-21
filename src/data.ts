@@ -9,6 +9,9 @@ export const LENB=[0,0,2,10,20,35,55,80,110];
 export const TARGETS=[300,450,700,1000,1500,2200,3200,4500];
 export const BOSS_ROUNDS=[3,6,8];
 export const DROPS=20, BURNS=3, LINE_MAX=8, BAG_CAP=10, NB_SLOTS=3;
+/* Each row has its own ceiling, so "which row?" is a real choice from the first drop:
+   the short row takes quick words, the long row is where you commit to a big one. */
+export const LINE_CAPS=[4,6,8,6];
 
 export const STARTERS=[
   {id:'katib',n:'كيس الكاتب',letters:'المكتبونير',root:'كتب',d:'متوازن، كثير الكلمات القصيرة.'},

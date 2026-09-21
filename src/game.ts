@@ -1,5 +1,5 @@
 import { loadDict, norm, IDX, DISP, ROOTS, SORTED, isAlive, isWord, hasAl, displayOf, rootOf, spaced } from './dict';
-import { VAL, LETTERS, FAM, famOf, LENB, TARGETS, BOSS_ROUNDS, DROPS, BURNS, LINE_MAX, BAG_CAP, NB_SLOTS, STARTERS, PATTERNS, patOf, RELICS, ROWMODS, BOSSES, ENCH, PATHS, pathLvl } from './data';
+import { VAL, LETTERS, FAM, famOf, LENB, TARGETS, BOSS_ROUNDS, DROPS, BURNS, LINE_MAX, LINE_CAPS, BAG_CAP, NB_SLOTS, STARTERS, PATTERNS, patOf, RELICS, ROWMODS, BOSSES, ENCH, PATHS, pathLvl } from './data';
 
 /* ================= STATE ================= */
 let S=null, uid=1;
@@ -10,6 +10,7 @@ const has=id=>S.relics.includes(id);
 const nLines=()=>has('fourth')?4:3;
 const bagCap=()=>has('nasikh')?13:BAG_CAP;
 const nbSlots=()=>has('inkwell')?4:NB_SLOTS;
+const lineMax=i=>LINE_CAPS[i]??LINE_MAX;
 const nbOf=root=>root?S.notebook.find(n=>n.root===root):null;
 const nbLetters=()=>{const s=new Set(); S.notebook.forEach(n=>[...n.root].forEach(c=>s.add(c))); return s;};
 
@@ -35,7 +36,7 @@ function startRound(){
   Object.assign(S,{target:TARGETS[r-1],score:0,drops:S.dropsMax,burns:S.burnsMax,
     lines:[[],[],[],[]],junk:[false,false,false,false],lock:[0,0,0,0],fixed:[0,0,0,0],chain:0,sealedSinceDrop:true,
     rootCounts:{},roundRoots:{},lastEnd:null,dotUses:3,dropCount:0,log:[],top:[],
-    draw:shuffle(S.bag.map(t=>t.id)),boss:null,phase:'intro',shop:null,picker:null,nbOffer:null});
+    draw:shuffle(S.bag.map(t=>t.id)),boss:null,wazn:pick(PATTERNS.filter(p=>p.id!=='thulathi')).id,phase:'intro',shop:null,picker:null,nbOffer:null});
   if(BOSS_ROUNDS.includes(r)){
     const pool=r===3?['blind','termite','dry']:r===6?['rhyme','weight','rush']:Object.keys(BOSSES);
     S.boss={id:pick(pool)};
@@ -67,7 +68,7 @@ function placed(i,tile,atStart){
 function stateOf(i,tile,atStart){
   if(S.junk[i]) return 'junk';
   if(S.lock[i]>0) return 'locked';
-  if(S.lines[i].length>=LINE_MAX) return 'dead';
+  if(S.lines[i].length>=lineMax(i)) return 'full';
   const s=placed(i,tile,atStart).map(t=>t.ch).join('');
   return isWord(s)?'word':isAlive(s)?'alive':'dead';
 }
@@ -84,6 +85,21 @@ function parasiteTarget(i,tile){
   for(let k=1;k<n;k++){const j=(i+k)%n; const st=stateOf(j,tile,false); if(st==='word'||st==='alive') return j;}
   return null;
 }
+const waznOf=id=>PATTERNS.find(p=>p.id===id);
+/* Which still-undrawn letter would finish this row on the round's commissioned wazn.
+   Recall becomes perception: the board remembers the pattern so the player doesn't. */
+function waznHint(i){
+  if(!S.wazn||S.junk[i]||S.lock[i]>0||!S.lines[i].length||S.lines[i].length>=lineMax(i)) return null;
+  const s=lineStr(i), seen=new Set();
+  for(const id of S.draw){
+    const t=S.bag.find(b=>b.id===id);
+    if(!t||seen.has(t.ch)) continue;
+    seen.add(t.ch);
+    const w=s+t.ch, p=isWord(w)?patOf(w):null;
+    if(p&&p.id===S.wazn) return t.ch;
+  }
+  return null;
+}
 
 /* ================= SCORING ================= */
 function scoreWord(tiles,s,row){
@@ -92,8 +108,9 @@ function scoreWord(tiles,s,row){
   chips+=LENB[Math.min(len,8)];
   let mult=1+Math.max(0,len-3);
   const p=patOf(s);
-  if(p){ const lv=S.patLv[p.id]||1, k=has('wazzan')?2:1;
-    chips+=Math.round(p.c*(1+.5*(lv-1)))*k; mult+=(p.m+lv-1)*k; tags.push('وزن '+p.n+(lv>1?' م'+lv:'')); }
+  if(p){ const lv=S.patLv[p.id]||1, com=p.id===S.wazn, k=(has('wazzan')?2:1)*(com?2:1);
+    chips+=Math.round(p.c*(1+.5*(lv-1)))*k; mult+=(p.m+lv-1)*k; tags.push('وزن '+p.n+(lv>1?' م'+lv:''));
+    if(com) tags.push('طلب الجولة ×٢'); }
   if(hasAl(s)){ mult+=1; tags.push('ال +١'); }
   const root=rootOf(s), nb=nbOf(root);
   if(nb){ chips+=5*nb.lvl; mult+=nb.lvl; tags.push('دفتر '+spaced(root)+' م'+nb.lvl); }
@@ -123,10 +140,11 @@ let fx={line:null,kind:null};
 function drop(i,atStart){
   if(S.phase!=='play'||i>=nLines()) return;
   if(S.lock[i]>0){ toast('هذا السطر جافّ الآن'); return; }
+  if(!S.junk[i]&&S.lines[i].length>=lineMax(i)){ toast('هذا السطر ممتلئ، اختمه أولًا'); return; }
   const tile=S.cur; audio('drop');
   if(!S.sealedSinceDrop) S.chain=has('ember')?Math.max(0,S.chain-1):0;
   S.sealedSinceDrop=false;
-  if(S.junk[i]){ if(S.lines[i].length<LINE_MAX) S.lines[i]=[...S.lines[i],tile]; }
+  if(S.junk[i]){ if(S.lines[i].length<lineMax(i)) S.lines[i]=[...S.lines[i],tile]; }
   else {
     const st=stateOf(i,tile,atStart);
     if(st==='word'||st==='alive'){ S.lines[i]=placed(i,tile,atStart); fx={line:i,kind:'drop'}; }
@@ -149,9 +167,12 @@ function termite(){
   if(!isAlive(lineStr(best))) crack(best);
 }
 function crack(i){
+  const scrap=S.lines[i].reduce((a,t)=>a+(VAL[t.ch]||1),0);
+  S.score+=scrap;
   S.lines[i]=[]; S.chain=0; fx={line:i,kind:'crack'}; audio('crack');
-  if(has('mill')){ S.permMult+=.5; floatAt(i,{bad:true,text:'انكسر · الرحى +٠٫٥'}); }
-  else floatAt(i,{bad:true,text:'انكسر السطر'});
+  const tail=scrap?`، نشارة +${scrap}`:'';
+  if(has('mill')){ S.permMult+=.5; floatAt(i,{bad:true,text:'انكسر، الرحى +٠٫٥'+tail}); }
+  else floatAt(i,{bad:true,text:'انكسر السطر'+tail});
 }
 function advance(prev){
   if(prev&&prev.ench==='echo') S.cur={...prev,id:null,ench:null};
@@ -199,10 +220,7 @@ function seal(i,auto){
   if(has('thread')) for(let k=0;k<nLines();k++){ if(k!==i&&!S.junk[k]&&S.lines[k].length>=2&&isWord(lineStr(k))){ seal(k,true); if(S.phase!=='play') return; } }
   afterSeal(auto);
 }
-function afterSeal(auto){
-  if(S.score>=S.target&&S.phase==='play'){ S.phase='won'; render(); setTimeout(winRound,900); return; }
-  if(!auto) render();
-}
+function afterSeal(auto){ if(!auto) render(); }
 function endOfDrops(){
   S.phase='ending'; render();
   const n=nLines(); let k=0;
@@ -216,8 +234,8 @@ function endOfDrops(){
 }
 function winRound(){
   const boss=!!S.boss;
-  const base=4+(boss?3:0), left=Math.min(5,Math.max(0,S.drops)), interest=Math.min(5,Math.floor(S.gold/5));
-  S.earn={base,left,interest,total:base+left+interest};
+  const base=4+(boss?3:0), over=Math.max(0,Math.min(8,Math.floor((S.score/S.target-1)*8))), interest=Math.min(5,Math.floor(S.gold/5));
+  S.earn={base,over,interest,total:base+over+interest};
   S.gold+=S.earn.total; audio('win');
   if(S.round>=TARGETS.length){ S.phase='victory'; render(); return; }
   const cands=Object.entries(S.roundRoots).filter(([r])=>!nbOf(r)).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([r,c])=>({root:r,count:c}));
@@ -299,7 +317,7 @@ function tileHTML(t,cls=''){
   const nbd=S&&S.notebook&&nbLetters().has(t.ch)?'<span class="nbdot"></span>':'';
   return `<div class="tile ${cls} ${t.ench?'e-'+t.ench:''}">${t.ch}<span class="val">${VAL[t.ch]||1}</span>${nbd}</div>`;
 }
-const HINTLAB={word:'تكتمل هنا',alive:'تبقى حيّة',dead:'ستنكسر',junk:'حشو',locked:'جافّ',bounce:'سيرتد',jump:'سيقفز'};
+const HINTLAB={word:'تكتمل هنا',alive:'تبقى حيّة',dead:'ستنكسر',full:'ممتلئ',junk:'حشو',locked:'جافّ',bounce:'سيرتد',jump:'سيقفز'};
 function render(){
   if(!S) return;
   if(!S.bag){ app.innerHTML=''; renderOverlay(); return; }
@@ -313,6 +331,7 @@ function render(){
     <span class="tally"><b class="now">${S.score}</b><span class="track"><i style="width:${pct}%"></i></span><span class="goal">${S.target}</span></span>
     <span class="purse">${S.drops} إسقاطة &nbsp; <b>${S.gold}</b> دينار</span>
   </div>
+  <div class="commission">طلب هذه الجولة <b>${waznOf(S.wazn).n}</b><span>يدفع ضعفين</span></div>
   <div class="lines">`;
   for(let i=0;i<n;i++){
     const L=S.lines[i], s=L.map(t=>t.ch).join(''), junk=S.junk[i];
@@ -328,9 +347,10 @@ function render(){
     else if(junk&&L.length) sealBtn=`<button class="seal junkseal" data-seal="${i}">امسح<small>+${3*s.length}</small></button>`;
     const mod=S.rowMods[i];
     const startHint=has('muarrib')&&S.phase==='play'&&!junk&&S.lock[i]<=0?stateOf(i,S.cur,true):null;
+    const wh=S.phase==='play'?waznHint(i):null;
     h+=`<div class="line ${hint?'h-'+hint:''} ${junk?'junk':''} ${S.lock[i]>0?'locked':''} ${fxc}" data-line="${i}" tabindex="0" role="button" aria-label="السطر ${i+1}">
       ${startHint?`<div class="startzone" data-start="${i}"></div>`:''}
-      <div class="tags"><span style="display:flex;gap:4px"><span class="hintlab">${HINTLAB[hint]||''}</span>${startHint?`<span class="hintlab zs z-${startHint}">الأول: ${HINTLAB[startHint]||''}</span>`:''}</span>${mod?`<span class="modlab" data-mod="${mod}">${ROWMODS[mod].n}</span>`:''}</div>
+      <div class="tags"><span style="display:flex;gap:6px"><span class="hintlab">${HINTLAB[hint]||''}</span>${startHint?`<span class="hintlab zs z-${startHint}">الأول: ${HINTLAB[startHint]||''}</span>`:''}${wh?`<span class="waznhint">+${wh} ← ${waznOf(S.wazn).n}</span>`:''}</span><span style="display:flex;gap:6px">${mod?`<span class="modlab" data-mod="${mod}">${ROWMODS[mod].n}</span>`:''}<span class="cap">${L.length}/${lineMax(i)}</span></span></div>
       <div class="lm"><div class="word ${ok?'ok':''} ${junk?'junk':''}">${s?(ok?displayOf(s):s):'<span class="ph">· · ·</span>'}</div>
       ${rootl}
       ${L.some(t=>t.ench)?`<div class="chips">${L.filter(t=>t.ench).map(t=>`<span class="chip e-${t.ench}">${t.ch}</span>`).join('')}</div>`:''}</div>
@@ -382,7 +402,8 @@ function renderOverlay(){
     const lid=leadingPath(), lp=lid?PATHS.find(x=>x.id===lid):null;
     o=`<div class="card"><h2>الجولة ${S.round}</h2>
       <div class="kv"><div><span>الهدف</span><b>${S.target}</b></div><div><span>الإسقاطات</span><b>${S.dropsMax}</b></div><div><span>الحرق</span><b>${S.burnsMax}</b></div><div><span>حروف الكيس</span><b>${S.bag.length}</b></div></div>
-      ${lp?`<div class="pathnote" style="--pc:${lp.c}">مسارك الآن: <b>${lp.n}</b> · م${pathLevelOf(lid)}</div>`:''}
+      <div class="pathnote" style="--pc:var(--seal)">طلب هذه الجولة: <b>${waznOf(S.wazn).n}</b> — كلماته تدفع ضعفين</div>
+      ${lp?`<div class="pathnote" style="--pc:${lp.c}">مسارك الآن: <b>${lp.n}</b> م${pathLevelOf(lid)}</div>`:''}
       ${S.boss?`<div class="bosscard"><b>الزعيم: ${BOSSES[S.boss.id].n}</b><p>${BOSSES[S.boss.id].d}</p></div>`:''}
       <button class="btn" data-act="go">ابدأ</button></div>`;
   } else if(P==='roundwon'){
@@ -395,7 +416,7 @@ function renderOverlay(){
         <div class="choice">${S.nbOffer.map(c=>`<button data-write="${c.root}"><b>${spaced(c.root)}</b><span>ختمت منه ${c.count} ${c.count>1?'كلمات':'كلمة'} هذه الجولة</span></button>`).join('')}</div>`;
     }
     o=`<div class="card"><h2>عبرت الجولة ${S.round}</h2>
-      <div class="kv"><div><span>مكافأة الجولة</span><b>+${e.base}</b></div><div><span>إسقاطات لم تُستخدم</span><b>+${e.left}</b></div><div><span>فائدة (١ لكل ٥)</span><b>+${e.interest}</b></div><div><span>في جيبك</span><b>${S.gold}</b></div></div>
+      <div class="kv"><div><span>مكافأة الجولة</span><b>+${e.base}</b></div><div><span>تجاوز الهدف</span><b>+${e.over}</b></div><div><span>فائدة (١ لكل ٥)</span><b>+${e.interest}</b></div><div><span>في جيبك</span><b>${S.gold}</b></div></div>
       ${nbPart}
       <button class="btn ${S.nbOffer?'ghost':''}" data-act="shop">${S.nbOffer?'تخطَّ، إلى السوق':'إلى السوق'}</button></div>`;
   } else if(P==='shop'){
