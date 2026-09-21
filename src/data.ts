@@ -8,8 +8,12 @@ export const famOf=ch=>FAM.find(f=>f.includes(ch));
 export const LENB=[0,0,2,10,20,35,55,80,110];
 /* Rescaled for the seal budget. The old ladder was written for 20 drops and unlimited
    seals; with five seals on a pile that shrinks as you spell, a round yields a fraction of
-   what it used to. Measured with tools/bot.mjs, not guessed. */
-export const TARGETS=[150,210,285,370,470,590,730,900];
+   what it used to. Measured with tools/bot.mjs, not guessed.
+   The shape matters as much as the numbers: rounds 1-3 sit well under what a careless run
+   scores, because that is before any build exists and a roguelike that kills you on round
+   one has no run to speak of. The ladder bites from round 4, once the shop has had three
+   passes to give you something to compound. */
+export const TARGETS=[100,150,210,300,420,560,720,900];
 export const BOSS_ROUNDS=[3,6,8];
 export const DROPS=20, BURNS=3, LINE_MAX=8, BAG_CAP=10, NB_SLOTS=3;
 /* Each row has its own ceiling, so "which row?" is a real choice from the first drop:

@@ -348,7 +348,7 @@ function render(){
   let h=`<div class="head">
     <span class="rnd">جولة <b>${S.round}</b> من <b>${TARGETS.length}</b>${S.boss?` <span class="boss">${BOSSES[S.boss.id].n}</span>`:''}</span>
     <span class="tally"><b class="now">${S.score}</b><span class="track"><i style="width:${pct}%"></i></span><span class="goal">${S.target}</span></span>
-    <span class="purse"><b class="seals">${S.seals}</b> ختم &nbsp; ${S.draw.length} حرفًا &nbsp; <b>${S.gold}</b> د</span>
+    <span class="purse"><b class="seals">${S.seals}</b> ختم &nbsp; ${S.draw.length+S.top.length} حرفًا &nbsp; <b>${S.gold}</b> د</span>
   </div>
   <div class="commission">طلب هذه الجولة <b>${waznOf(S.wazn).n}</b><span>يدفع ضعفين</span></div>
   <div class="lines">`;
