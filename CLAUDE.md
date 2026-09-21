@@ -89,7 +89,11 @@ in the session history: a greedy bot averaged ~270 per 20-drop round pre-noteboo
 ## Conventions
 
 - Arabic UI text, RTL, Western digits for scores (tabular-nums).
-- Single dark theme on purpose. Tokens live in `:root` in `style.css`.
+- Single light theme on purpose — "the manuscript page": ink on laid paper, the board is a ruled
+  text block, everything else is marginalia. Tokens live in `:root` in `style.css` and are named
+  after pigments, and colour is semantic, never decorative: verdigris = the row stays alive,
+  ochre = a word completes (and the seal), madder = it breaks. Adding a colour means adding a
+  meaning. (Superseded the original dark lapis/saffron theme.)
 - Fonts are self-hosted in `src/fonts` (Amiri for words, Reem Kufi for headings, IBM Plex Sans
   Arabic for UI). No Google Fonts requests — the game must work offline and in the app shell.
 - Keep the page one screen, no page scrolling during play.

@@ -307,19 +307,12 @@ function render(){
   const hideNext=has('fourth')||(S.boss&&S.boss.id==='blind');
   const pct=Math.min(100,S.score/S.target*100);
   const chainM=1+.5*S.chain;
-  const nbHTML=Array.from({length:nbSlots()},(_,k)=>{const e=S.notebook[k]; return e?`<span class="nb">${spaced(e.root)}<small>م${e.lvl} · ${e.xp}/3</small></span>`:'<span class="nb empty">فارغ</span>';}).join('');
-  const ps=pathStats(), lead=leadingPath();
-  const pathsHTML=ps.map(p=>`<button class="pathchip ${p.id===lead?'lead':''}" data-path="${p.id}" style="--pc:${p.c}">${p.n}<b>${p.lvl>0?'م'+p.lvl:'—'}</b></button>`).join('');
-  let h=`<div class="top">
-    <div class="rnd">الجولة<b>${S.round} / ${TARGETS.length}</b>${S.boss?`<span class="boss">${BOSSES[S.boss.id].n}</span>`:''}</div>
-    <div class="prog"><div class="nums"><b>${S.score}</b><span>الهدف ${S.target}</span></div><div class="bar"><i style="width:${pct}%"></i></div></div>
-    <div class="res"><div class="pill"><small>إسقاطات</small><b>${S.drops}</b></div><div class="pill gold"><small>دنانير</small><b>${S.gold}</b></div></div>
+  const lead=leadingPath(), leadP=lead?PATHS.find(p=>p.id===lead):null;
+  let h=`<div class="head">
+    <span class="rnd">جولة <b>${S.round}</b> من <b>${TARGETS.length}</b>${S.boss?` <span class="boss">${BOSSES[S.boss.id].n}</span>`:''}</span>
+    <span class="tally"><b class="now">${S.score}</b><span class="track"><i style="width:${pct}%"></i></span><span class="goal">${S.target}</span></span>
+    <span class="purse">${S.drops} إسقاطة &nbsp; <b>${S.gold}</b> دينار</span>
   </div>
-  <div class="strip"><span class="lab">الدفتر</span>${nbHTML}</div>
-  <div class="strip paths"><span class="lab">مسارك</span>${pathsHTML}</div>
-  <div class="strip">${S.relics.length?S.relics.map(r=>`<button class="relic" data-relic="${r}">${RELICS[r].n}</button>`).join(''):'<span class="none">لا طلاسم بعد</span>'}</div>
-  <div class="meta"><span class="chain ${S.chain>=2?'hot':''}">${S.chain>0?`سلسلة ${S.chain} · ×${fmt(chainM)}`:'اختم على التوالي لتبني سلسلة'}</span>
-    <span>${S.boss&&S.boss.id==='rhyme'&&S.lastEnd?`<span class="bossnote">ابدأ بـ«${S.lastEnd}»</span> · `:''}<button class="linkbtn" data-act="book">الأوزان والكيس</button></span></div>
   <div class="lines">`;
   for(let i=0;i<n;i++){
     const L=S.lines[i], s=L.map(t=>t.ch).join(''), junk=S.junk[i];
@@ -328,8 +321,8 @@ function render(){
     const fxc=fx.line===i?(fx.kind==='crack'?'cracked':fx.kind==='sealed'?'sealed':''):'';
     let rootl='';
     if(ok){ const r=rootOf(s), p=patOf(s), nb=nbOf(r), c=r?S.rootCounts[r]||0:0;
-      const bits=[]; if(r) bits.push(`<span class="${nb?'nbk':''}">${spaced(r)}${nb?' · دفتر':''}</span>`); if(c) bits.push(`رنين <b>×${c+1}</b>`); if(p) bits.push('وزن '+p.n);
-      rootl=bits.length?`<div class="rootlab">${bits.join(' · ')}</div>`:''; }
+      const bits=[]; if(r) bits.push(`<span class="${nb?'nbk':''}">${spaced(r)}${nb?' من الدفتر':''}</span>`); if(c) bits.push(`رنين <b>×${c+1}</b>`); if(p) bits.push('وزن '+p.n);
+      rootl=bits.length?`<div class="rootlab">${bits.map(b=>`<span>${b}</span>`).join('')}</div>`:''; }
     let sealBtn='';
     if(ok&&s.length>=2){const p=scoreWord(L,s,i); sealBtn=`<button class="seal" data-seal="${i}">ختم<small>+${p.score}</small></button>`;}
     else if(junk&&L.length) sealBtn=`<button class="seal junkseal" data-seal="${i}">امسح<small>+${3*s.length}</small></button>`;
@@ -340,12 +333,11 @@ function render(){
       <div class="tags"><span style="display:flex;gap:4px"><span class="hintlab">${HINTLAB[hint]||''}</span>${startHint?`<span class="hintlab zs z-${startHint}">الأول: ${HINTLAB[startHint]||''}</span>`:''}</span>${mod?`<span class="modlab" data-mod="${mod}">${ROWMODS[mod].n}</span>`:''}</div>
       <div class="lm"><div class="word ${ok?'ok':''} ${junk?'junk':''}">${s?(ok?displayOf(s):s):'<span class="ph">· · ·</span>'}</div>
       ${rootl}
-      <div class="chips">${L.map(t=>`<span class="chip ${t.ench?'e-'+t.ench:''}">${t.ch}</span>`).join('')}</div></div>
+      ${L.some(t=>t.ench)?`<div class="chips">${L.filter(t=>t.ench).map(t=>`<span class="chip e-${t.ench}">${t.ch}</span>`).join('')}</div>`:''}</div>
       ${sealBtn}</div>`;
   }
   const pileN=S.draw.length+S.top.length;
   h+=`</div>
-  <div class="log">${S.log.map(l=>`<span>${l.w}<b>${l.sc}</b></span>`).join('')}</div>
   <div class="hand">
     <button class="burn" data-act="burn" ${S.burns<=0||S.phase!=='play'?'disabled':''}>احرق<small>${S.burns} متبقية</small></button>
     <div class="cur">${tileHTML(S.cur,'big')}
@@ -353,6 +345,14 @@ function render(){
       ${S.boss&&S.boss.id==='rush'?'<div class="timer"><i style="width:100%"></i></div>':''}
       ${has('dot')&&famOf(S.cur.ch)&&S.cur.ench!=='ink'?`<button class="dotbtn" data-act="dot" ${S.dotUses<=0?'disabled':''}>انقل النقطة (${S.dotUses})</button>`:''}</div>
     <button class="nextwrap" data-act="twin" ${has('twin')&&!hideNext?'':'tabindex="-1"'}>${has('twin')&&!hideNext?'التالي · بدّل':'التالي'}${hideNext?tileHTML(null,'small'):tileHTML(S.next,'small')}</button>
+  </div>
+  <div class="foot">
+    ${S.notebook.map(e=>`<span class="nb">${spaced(e.root)}<small>م${e.lvl}</small></span>`).join('')}
+    ${leadP?`<button class="pathchip lead" data-path="${leadP.id}" style="--pc:${leadP.c}">مسار ${leadP.n}<b>م${pathLevelOf(lead)}</b></button>`:''}
+    ${S.relics.map(r=>`<button class="relic" data-relic="${r}">${RELICS[r].n}</button>`).join('')}
+    ${S.chain>0?`<span class="chain ${S.chain>=2?'hot':''}">سلسلة ${S.chain} ×${fmt(chainM)}</span>`:''}
+    ${S.boss&&S.boss.id==='rhyme'&&S.lastEnd?`<span class="bossnote">ابدأ بـ«${S.lastEnd}»</span>`:''}
+    <button class="linkbtn" data-act="book">الأوزان والكيس</button>
   </div>`;
   app.innerHTML=h; fx={line:null,kind:null};
   renderOverlay();
