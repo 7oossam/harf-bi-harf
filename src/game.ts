@@ -1,5 +1,5 @@
 import { loadDict, norm, IDX, DISP, ROOTS, SORTED, isAlive, isWord, hasAl, displayOf, rootOf, spaced } from './dict';
-import { VAL, LETTERS, FAM, famOf, LENB, TARGETS, BOSS_ROUNDS, DROPS, BURNS, LINE_MAX, LINE_CAPS, ZAWAID, ROOT_AT, BAG_CAP, NB_SLOTS, STARTERS, PATTERNS, patOf, RELICS, ROWMODS, BOSSES, ENCH, PATHS, pathLvl } from './data';
+import { VAL, LETTERS, FAM, famOf, LENB, TARGETS, BOSS_ROUNDS, DROPS, BURNS, LINE_MAX, LINE_CAPS, ZAWAID, COPIES, SEALS, BAG_CAP, NB_SLOTS, STARTERS, PATTERNS, patOf, RELICS, ROWMODS, BOSSES, ENCH, PATHS, pathLvl } from './data';
 
 /* ================= STATE ================= */
 let S=null, uid=1;
@@ -11,13 +11,18 @@ const nLines=()=>has('fourth')?4:3;
 const bagCap=()=>has('nasikh')?13:BAG_CAP;
 const nbSlots=()=>has('inkwell')?4:NB_SLOTS;
 const lineMax=i=>LINE_CAPS[i]??LINE_MAX;
-/* الرسوخ: every seal inks the radicals of its root. Ink enough and the letter takes root —
-   it gets a second entry in the draw pile, so it falls about twice as often. Spelling a root
-   makes that root easier to spell again, and the bag quietly becomes a specialist. */
-const inkOf=ch=>S.ink?.[ch]||0;
-const isRooted=ch=>inkOf(ch)>=ROOT_AT;
-const rootedLetters=()=>[...new Set(S.bag.map(t=>t.ch))].filter(isRooted);
-const drawPile=()=>shuffle([...S.bag.map(t=>t.id),...S.bag.filter(t=>isRooted(t.ch)).map(t=>t.id)]);
+/* The round's pile: every letter twice, shuffled, and it never refills. This is the rack. */
+const freshPile=()=>{const ids=[]; for(let c=0;c<COPIES;c++) for(const t of S.bag) ids.push(t.id); return shuffle(ids);};
+/* Sealing strikes the word's letters out of what is still to fall — Scrabble's "leave".
+   A long word scores more and costs you more of your own round. */
+function spendLetters(tiles){
+  let gone=0;
+  for(const t of tiles){
+    const k=S.draw.findIndex(id=>{const b=S.bag.find(x=>x.id===id); return b&&b.ch===t.ch;});
+    if(k>=0){ S.draw.splice(k,1); gone++; }
+  }
+  return gone;
+}
 const nbOf=root=>root?S.notebook.find(n=>n.root===root):null;
 const nbLetters=()=>{const s=new Set(); S.notebook.forEach(n=>[...n.root].forEach(c=>s.add(c))); return s;};
 
@@ -34,7 +39,7 @@ function pathFeedback(id){
 function newRun(starter){
   const st=STARTERS.find(x=>x.id===starter);
   S={phase:'intro',round:1,gold:4,bag:[...st.letters].map(ch=>({id:uid++,ch,ench:null})),relics:[],
-     rowMods:[null,null,null,null],notebook:[{root:st.root,lvl:1,xp:0}],patLv:{},permMult:0,seenRoots:{},seenPatterns:{},ink:{},
+     rowMods:[null,null,null,null],notebook:[{root:st.root,lvl:1,xp:0}],patLv:{},permMult:0,seenRoots:{},seenPatterns:{},
      burnsMax:BURNS,dropsMax:DROPS,stats:{words:0,best:null,total:0,maxChain:0},mute:S?S.mute:false,starter:st.n};
   startRound();
 }
@@ -43,7 +48,8 @@ function startRound(){
   Object.assign(S,{target:TARGETS[r-1],score:0,drops:S.dropsMax,burns:S.burnsMax,
     lines:[[],[],[],[]],junk:[false,false,false,false],lock:[0,0,0,0],fixed:[0,0,0,0],chain:0,sealedSinceDrop:true,
     rootCounts:{},roundRoots:{},lastEnd:null,dotUses:3,dropCount:0,log:[],top:[],
-    draw:drawPile(),boss:null,wazn:pick(PATTERNS.filter(p=>p.id!=='thulathi')).id,phase:'intro',shop:null,picker:null,nbOffer:null});
+    draw:[],seals:SEALS,boss:null,wazn:pick(PATTERNS.filter(p=>p.id!=='thulathi')).id,phase:'intro',shop:null,picker:null,nbOffer:null});
+  S.draw=freshPile(); S.drops=S.draw.length;
   if(BOSS_ROUNDS.includes(r)){
     const pool=r===3?['blind','termite','dry']:r===6?['rhyme','weight','rush']:Object.keys(BOSSES);
     S.boss={id:pick(pool)};
@@ -53,13 +59,11 @@ function startRound(){
 }
 function drawTile(){
   if(S.top.length) return S.top.shift();
-  for(let g=0;g<100;g++){
-    if(!S.draw.length) S.draw=drawPile();
-    if(!S.draw.length) break;
+  while(S.draw.length){
     const id=S.draw.pop(); const t=S.bag.find(b=>b.id===id);
     if(t) return {...t};
   }
-  return {id:null,ch:'ا',ench:null};
+  return null;
 }
 const lineStr=i=>S.lines[i].map(t=>t.ch).join('');
 function placed(i,tile,atStart){
@@ -160,11 +164,11 @@ function drop(i,atStart){
     else if(has('pen')){ S.lines[i]=[...S.lines[i],tile]; S.junk[i]=true; fx={line:i,kind:'crack'}; audio('crack'); }
     else crack(i);
   }
-  S.drops--; S.dropCount++;
+  S.drops=Math.max(0,S.draw.length+(S.next?1:0)+(S.cur?1:0)-1); S.dropCount++;
   for(let k=0;k<4;k++) if(S.lock[k]>0) S.lock[k]--;
   if(S.boss&&S.boss.id==='termite'&&S.dropCount%4===0) termite();
   advance(tile);
-  if(S.drops<=0) endOfDrops(); else render();
+  if(!S.cur||S.seals<=0) endOfDrops(); else render();
 }
 function termite(){
   let best=-1,bl=0; for(let k=0;k<nLines();k++){ if(!S.junk[k]&&S.lines[k].length>bl){bl=S.lines[k].length;best=k;} }
@@ -195,6 +199,7 @@ function cycleDot(){
 function twinSwap(){ if(S.phase!=='play'||!has('twin')||has('fourth')) return; [S.cur,S.next]=[S.next,S.cur]; audio('drop'); render(); }
 function seal(i,auto){
   if(S.phase!=='play') return;
+  if(S.seals<=0){ toast('لم يبق لك ختم في هذه الجولة'); return; }
   const tiles=S.lines[i]; if(!tiles.length) return;
   const s=tiles.map(t=>t.ch).join('');
   if(S.junk[i]){
@@ -208,11 +213,6 @@ function seal(i,auto){
   if(!S.stats.best||r.score>S.stats.best.score) S.stats.best={w:displayOf(s),score:r.score};
   if(r.root){
     S.rootCounts[r.root]=(S.rootCounts[r.root]||0)+1; S.roundRoots[r.root]=(S.roundRoots[r.root]||0)+1; S.seenRoots[r.root]=1;
-    for(const ch of new Set([...r.root])){
-      const was=isRooted(ch); S.ink[ch]=inkOf(ch)+1;
-      if(!was&&isRooted(ch)&&S.bag.some(t=>t.ch===ch))
-        setTimeout(()=>toast(`رسخ <b>${ch}</b> في كيسك — صار يسقط أكثر`),900);
-    }
     const nb=nbOf(r.root);
     if(nb){ nb.xp+=has('inkwell')?2:1; if(nb.xp>=3){nb.xp-=3; nb.lvl++; setTimeout(()=>toast(`ارتقى الجذر <b>${spaced(nb.root)}</b> إلى المستوى ${nb.lvl}`),700);} }
   }
@@ -223,6 +223,9 @@ function seal(i,auto){
   if(has('ring')) S.top=[...tiles.filter(t=>!t.heavy).map(t=>({...t})),...S.top];
   if(has('nasikh')&&S.bag.length<bagCap()){ const best=tiles.filter(t=>!t.heavy).reduce((a,b)=>(VAL[b.ch]||0)>(VAL[a.ch]||0)?b:a); S.bag.push({id:uid++,ch:best.ch,ench:null}); }
   if(has('eater')&&s.length>=5&&S.bag.length>4){ const cand=tiles.filter(t=>t.id&&S.bag.some(b=>b.id===t.id)); if(cand.length){const v=pick(cand); S.bag=S.bag.filter(b=>b.id!==v.id); S.permMult+=1; setTimeout(()=>toast(`التهم آكل الحروف «${v.ch}» · +١ مضاعف دائم`),500);} }
+  const gone=spendLetters(tiles);
+  S.seals--; S.drops=S.draw.length+(S.next?1:0)+(S.cur?1:0);
+  if(gone) floatAt(i,{bad:true,text:`أُنفق ${gone} من حروف الجولة`});
   S.lines[i]=[]; fx={line:i,kind:'sealed'};
   if(S.rowMods[i]==='echo') S.lines[i]=[{id:null,ch:s[s.length-1],ench:null}];
   if(S.boss&&S.boss.id==='dry') S.lock[i]=2;
@@ -232,13 +235,16 @@ function seal(i,auto){
   if(has('thread')) for(let k=0;k<nLines();k++){ if(k!==i&&!S.junk[k]&&S.lines[k].length>=2&&isWord(lineStr(k))){ seal(k,true); if(S.phase!=='play') return; } }
   afterSeal(auto);
 }
-function afterSeal(auto){ if(!auto) render(); }
+function afterSeal(auto){
+  if(S.seals<=0&&S.phase==='play'){ S.phase='ending'; setTimeout(()=>{ if(S.score>=S.target){S.phase='won'; render(); setTimeout(winRound,700);} else {S.phase='over'; audio('lose'); render();} },600); render(); return; }
+  if(!auto) render();
+}
 function endOfDrops(){
   S.phase='ending'; render();
   const n=nLines(); let k=0;
   const step=()=>{
     if(S.phase!=='ending') return;
-    while(k<n&&!(S.lines[k].length>=2&&!S.junk[k]&&isWord(lineStr(k)))) k++;
+    while(k<n&&!(S.seals>0&&S.lines[k].length>=2&&!S.junk[k]&&isWord(lineStr(k)))) k++;
     if(k<n){ S.phase='play'; seal(k,true); if(S.phase==='play') S.phase='ending'; render(); k++; setTimeout(step,450); return; }
     if(S.score>=S.target){S.phase='won'; render(); setTimeout(winRound,700);} else { S.phase='over'; audio('lose'); render(); }
   };
@@ -327,8 +333,8 @@ const app=document.getElementById('app'), ovl=document.getElementById('ovl');
 function tileHTML(t,cls=''){
   if(!t) return `<div class="tile ${cls} hidden">؟</div>`;
   const nbd=S&&S.notebook&&nbLetters().has(t.ch)?'<span class="nbdot"></span>':'';
-  const rk=S&&S.ink&&isRooted(t.ch)?' rooted':'', zd=ZAWAID.has(t.ch)?' zaid':'';
-  return `<div class="tile ${cls}${rk}${zd} ${t.ench?'e-'+t.ench:''}">${t.ch}<span class="val">${VAL[t.ch]||1}</span>${nbd}</div>`;
+  const zd=ZAWAID.has(t.ch)?' zaid':'';
+  return `<div class="tile ${cls}${zd} ${t.ench?'e-'+t.ench:''}">${t.ch}<span class="val">${VAL[t.ch]||1}</span>${nbd}</div>`;
 }
 const HINTLAB={word:'تكتمل هنا',alive:'تبقى حيّة',dead:'ستنكسر',full:'ممتلئ',junk:'حشو',locked:'جافّ',bounce:'سيرتد',jump:'سيقفز'};
 function render(){
@@ -342,7 +348,7 @@ function render(){
   let h=`<div class="head">
     <span class="rnd">جولة <b>${S.round}</b> من <b>${TARGETS.length}</b>${S.boss?` <span class="boss">${BOSSES[S.boss.id].n}</span>`:''}</span>
     <span class="tally"><b class="now">${S.score}</b><span class="track"><i style="width:${pct}%"></i></span><span class="goal">${S.target}</span></span>
-    <span class="purse">${S.drops} إسقاطة &nbsp; <b>${S.gold}</b> دينار</span>
+    <span class="purse"><b class="seals">${S.seals}</b> ختم &nbsp; ${S.draw.length} حرفًا &nbsp; <b>${S.gold}</b> د</span>
   </div>
   <div class="commission">طلب هذه الجولة <b>${waznOf(S.wazn).n}</b><span>يدفع ضعفين</span></div>
   <div class="lines">`;
@@ -356,7 +362,7 @@ function render(){
       const bits=[]; if(r) bits.push(`<span class="${nb?'nbk':''}">${spaced(r)}${nb?' من الدفتر':''}</span>`); if(c) bits.push(`رنين <b>×${c+1}</b>`); if(p) bits.push('وزن '+p.n);
       rootl=bits.length?`<div class="rootlab">${bits.map(b=>`<span>${b}</span>`).join('')}</div>`:''; }
     let sealBtn='';
-    if(ok&&s.length>=2){const p=scoreWord(L,s,i); sealBtn=`<button class="seal" data-seal="${i}">ختم<small>+${p.score}</small></button>`;}
+    if(ok&&s.length>=2&&S.seals>0){const p=scoreWord(L,s,i); sealBtn=`<button class="seal" data-seal="${i}">ختم<small>+${p.score}</small><small class="cost">−${s.length} حرف</small></button>`;}
     else if(junk&&L.length) sealBtn=`<button class="seal junkseal" data-seal="${i}">امسح<small>+${3*s.length}</small></button>`;
     const mod=S.rowMods[i];
     const startHint=has('muarrib')&&S.phase==='play'&&!junk&&S.lock[i]<=0?stateOf(i,S.cur,true):null;
@@ -381,7 +387,6 @@ function render(){
   </div>
   <div class="foot">
     ${S.notebook.map(e=>`<span class="nb">${spaced(e.root)}<small>م${e.lvl}</small></span>`).join('')}
-    ${rootedLetters().length?`<span class="rooted"><span class="lab">راسخ</span>${rootedLetters().map(c=>`<b>${c}</b>`).join('')}</span>`:''}
     ${leadP?`<button class="pathchip lead" data-path="${leadP.id}" style="--pc:${leadP.c}">مسار ${leadP.n}<b>م${pathLevelOf(lead)}</b></button>`:''}
     ${S.relics.map(r=>`<button class="relic" data-relic="${r}">${RELICS[r].n}</button>`).join('')}
     ${S.chain>0?`<span class="chain ${S.chain>=2?'hot':''}">سلسلة ${S.chain} ×${fmt(chainM)}</span>`:''}
@@ -395,9 +400,7 @@ function render(){
    a زائدة widens which أوزان you can reach, a radical deepens the roots you keep spelling. */
 function letterTag(ch){
   if(ZAWAID.has(ch)) return 'زائدة — تبني الأوزان';
-  if(isRooted(ch)) return 'راسخ — يسقط أكثر';
-  const k=inkOf(ch);
-  return k?`جذر — رسوخه ${k}/${ROOT_AT}`:'جذر — يحمل المعنى';
+  return 'جذر — يحمل المعنى';
 }
 function bagGrid(clickable){
   const tiles=[...S.bag].sort((a,b)=>a.ch.localeCompare(b.ch,'ar'));
@@ -469,7 +472,7 @@ function renderOverlay(){
     o=`<div class="card"><h2>كيسك · ${S.bag.length} من ${bagCap()}</h2>${bagGrid(false)}
       <h3>الدفتر</h3><div class="kv">${S.notebook.map(x=>`<div><span>${spaced(x.root)}</span><b>م${x.lvl} · +${5*x.lvl} نقاط +${x.lvl} مضاعف</b></div>`).join('')}</div>
       <h3>الأوزان</h3><div class="pat">${PATTERNS.map(p=>{const lv=S.patLv[p.id]||1; return `<div><b>${p.n}</b>م${lv} · +${Math.round(p.c*(1+.5*(lv-1)))} نقاط +${p.m+lv-1} مضاعف</div>`;}).join('')}</div>
-      <h3>كيسك حرفًا حرفًا</h3><div class="pat">${[...new Set(S.bag.map(t=>t.ch))].sort((a,b)=>inkOf(b)-inkOf(a)).map(c=>`<div><b>${c}</b>${letterTag(c)}</div>`).join('')}</div>
+      <h3>كيسك حرفًا حرفًا</h3><div class="pat">${([...new Set(S.bag.map(t=>t.ch))] as string[]).sort((a,b)=>a.localeCompare(b,'ar')).map(c=>`<div><b>${c}</b>${letterTag(c)}</div>`).join('')}</div>
       <h3>المسارات</h3><div class="pathsgrid">${pathStats().map(p=>`<div style="--pc:${p.c}" class="${p.id===lead?'lead':''}"><b>${p.n}${p.lvl>0?' · م'+p.lvl+' · +'+Math.round(p.lvl*15)+'٪':''}</b><small>${p.d}</small></div>`).join('')}</div>
       ${S.permMult?`<p class="sub">مضاعف دائم: +${fmt(S.permMult)}</p>`:''}
       ${S.rowMods.slice(0,nLines()).some(Boolean)?`<h3>نقوش السطور</h3><div class="kv">${S.rowMods.slice(0,nLines()).map((m,r)=>`<div><span>السطر ${r+1}</span><b>${m?ROWMODS[m].n:'—'}</b></div>`).join('')}</div>`:''}

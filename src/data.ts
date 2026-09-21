@@ -6,7 +6,10 @@ export const LETTERS=Object.keys(VAL);
 export const FAM=[['ب','ت','ث','ن','ي'],['ج','ح','خ'],['د','ذ'],['ر','ز'],['س','ش'],['ص','ض'],['ط','ظ'],['ع','غ'],['ف','ق'],['ه','ة']];
 export const famOf=ch=>FAM.find(f=>f.includes(ch));
 export const LENB=[0,0,2,10,20,35,55,80,110];
-export const TARGETS=[300,450,700,1000,1500,2200,3200,4500];
+/* Rescaled for the seal budget. The old ladder was written for 20 drops and unlimited
+   seals; with five seals on a pile that shrinks as you spell, a round yields a fraction of
+   what it used to. Measured with tools/bot.mjs, not guessed. */
+export const TARGETS=[150,210,285,370,470,590,730,900];
 export const BOSS_ROUNDS=[3,6,8];
 export const DROPS=20, BURNS=3, LINE_MAX=8, BAG_CAP=10, NB_SLOTS=3;
 /* Each row has its own ceiling, so "which row?" is a real choice from the first drop:
@@ -18,9 +21,13 @@ export const LINE_CAPS=[4,6,8,6];
    meaning as a radical. The game does not invent properties for letters — the language
    already assigned them, and this is the one that decides what a letter is *for*. */
 export const ZAWAID=new Set([...'سالتمونيه']);
-/* Seal a root this many times and its radicals take root in your bag: they start falling
-   more often, so what you spell reshapes what you draw. That feedback is the build. */
-export const ROOT_AT=3;
+
+/* The round is a Scrabble rack, not a faucet. Your ten letters fall twice each and never
+   refill, and sealing a word STRIKES its letters from what is left to fall — so a long word
+   scores more and shortens your own round. Five seals is the other wall: "can I make a word"
+   stops being the question and "is this word worth one of my five" starts being it.
+   (Scrabble's leave + Balatro's hand budget. Nothing here is free any more.) */
+export const COPIES=3, SEALS=5;
 
 export const STARTERS=[
   {id:'katib',n:'كيس الكاتب',letters:'المكتبونير',root:'كتب',d:'متوازن، كثير الكلمات القصيرة.'},

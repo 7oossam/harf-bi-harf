@@ -46,6 +46,8 @@ button:focus-visible,.line:focus-visible{outline:2px solid var(--ink);outline-of
 .tally .track i{display:block;height:100%;background:var(--seal);transition:width .4s}
 .head .purse{font-size:12px;color:var(--ink2);white-space:nowrap;font-variant-numeric:tabular-nums}
 .head .purse b{color:var(--seal);font-weight:600;font-size:15px}
+.head .purse b.seals{color:var(--rubric)}
+.seal .cost{font-size:9px;opacity:.8;font-variant-numeric:tabular-nums}
 /* the round's commission: one wazn to hold in your head, not eleven */
 .commission{display:flex;align-items:baseline;gap:8px;font-size:11px;color:var(--ink2);
   border-bottom:1px solid var(--rule);padding-bottom:4px;margin-top:-2px}

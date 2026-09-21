@@ -85,12 +85,21 @@ was optimal. Now the round always runs its 20 drops, and beating the target buys
 gradient rather than a cliff. Rows have their own ceilings (`LINE_CAPS` = 4/6/8) so "which row?"
 is a real choice; a full row refuses the drop rather than breaking.
 
-**الرسوخ — the loop that closes.** Sealing used to be a dead end: points, row clears, nothing
-changed. Now every seal inks the radicals of its root (`S.ink`, run-long). At `ROOT_AT` (3) a
-letter **takes root**: `drawPile()` gives it a second entry, so it falls about twice as often.
-Spelling a root makes that root easier to spell again, and the bag drifts into a specialist —
-the build is something the player grows into rather than picks. The cost is real: drifting
-narrow means the round's commissioned wazn may need a letter you now see less.
+**The letter economy — what makes a decision cost something.** Sid Meier's test for an
+interesting decision is that no option is clearly best and the player *gives something up*.
+The old round failed that: sealing was free, letters always came back, and you could seal as
+often as you liked. Two scarcities fix it, taken from the two games that solve this best:
+
+- **Spent letters (Scrabble's "leave").** The round's pile is every bag letter `COPIES` (3)
+  times, shuffled, and it *never refills*. Sealing strikes the word's letters out of what is
+  still to fall (`spendLetters`). A long word scores more and shortens your own round — that
+  is the trade.
+- **Five seals (Balatro's hand budget).** `SEALS` per round. "Can I make a word" stops being
+  the question; "is this word worth one of my five" starts being it. The round ends when the
+  pile runs dry or the seals run out.
+
+الرسوخ was removed to make room: it weighted the draw pile, which must now deplete strictly,
+and it drifted the bag automatically, which fought the bag-building it was meant to serve.
 
 **Letters are not given invented properties.** Arabic already assigned the one that matters:
 `ZAWAID` (سألتمونيها) marks the ten augment letters that build a وزن onto a root; everything
