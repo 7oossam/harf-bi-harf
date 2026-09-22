@@ -164,6 +164,29 @@ the round's وزن. Marks likewise: **الوَتَد** never counts, **التَ�
 Verified with `?dev=1`: `سطر الرَّحِم | row 3/3→3/3 | row0 radicals kept: 3`, `المَعْمَل |
 seals left: 3` after three seals, and affix cards in the bag unchanged at 2 across three seals.
 
+**The shop speaks in YOUR words, not the textbook's** (`affixPreview`). Hussam, from the shop
+screen: *"«ألف وتاء» and «تاء مربوطة» don't work alone like the written examples — to put one
+on كتب I'd need an ألف in the middle, and the row only takes three radicals."* He was right,
+and measuring it was damning: on the وَرّاق's four roots,
+
+| زيادة | alone | with a partner |
+|---|---|---|
+| **ات**@3 | **nothing** | مكتبات (+م) · كاتبات (+ا) |
+| ون@3 | نسخون only | تكتبون (+ت) |
+| ي@2 | جميع only | الكتيب (+ال) |
+| م@0 | مكتب · مدرس · مجمع | مكتوب (+و) |
+
+So the card was advertising **كاتبات** — a word needing two cards — while the card alone made
+nothing at all. A textbook example is not an offer. Every affix offer now runs `affixPreview`
+and shows real words assembled from *your* roots and the زوائد you already own; when it makes
+nothing it says so in madder and names the partner that would open it: *«وحدها لا تصنع شيئًا
+من جذورك — مع «م» تصنع مكتبات»*. And `genOffers` guarantees at least one of the two زوائد is
+useful right now, because a shop where both are combo-pieces is a shop with nothing to buy.
+
+This is the shape of the general fix, worth remembering: combo depth is good, **deception is
+not**. Keep the cards that need partners; just never let the card lie about what it does for
+the player holding it.
+
 **The commission is only ever something you can build** (`reachableWazns`). Hussam again:
 "whether I can hit the wazn depends on which زوائد I happen to own — so am I buying an affix
 for the score, or on the CHANCE it fits a required وزن?" A commission you cannot build is not

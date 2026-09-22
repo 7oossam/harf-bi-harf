@@ -267,6 +267,40 @@ function reachableWazns(){
   }
   return [...out];
 }
+/* Assemble a word from a bare root plus a list of [text, seat] affixes — the shop needs this
+   without any cards on a row. */
+const asmRoot=(r,list)=>{const at=k=>list.filter(x=>x[1]===k).map(x=>x[0]).join('');
+  return at(0)+r[0]+at(1)+r[1]+at(2)+r[2]+at(3);};
+
+/* What this زيادة would actually make FOR YOU — with your roots and the زوائد you already own.
+   Hussam, from the shop screen: "«ألف وتاء» and «تاء مربوطة» don't work alone like the written
+   examples; to put one on كتب I'd need an ألف in the middle." He is right, and measured: «ات»
+   makes NOTHING alone on the وَرّاق's four roots, while its card promised كاتبات — a word that
+   needs a second card. A textbook example is not an offer. So the shop shows real words from
+   YOUR bag, and when a card makes nothing alone it says so and names what would unlock it. */
+function affixPreview(id){
+  const a=AFFIX[id];
+  const owned=([...new Set(S.bag.filter(c=>c.k==='a').map(c=>c.a))] as string[]).filter(x=>AFFIX[x].s!==a.s);
+  const made=[];
+  for(const r of S.roots){
+    const w=asmRoot(r,[[a.t,a.s]]);
+    if(isWord(w)) made.push(displayOf(w));
+    for(const o of owned){
+      const w2=asmRoot(r,[[a.t,a.s],[AFFIX[o].t,AFFIX[o].s]]);
+      if(isWord(w2)) made.push(displayOf(w2));
+    }
+  }
+  if(made.length) return {made:[...new Set(made)].slice(0,4),needs:null};
+  /* nothing yet — name the زيادة that would open it, with the word it would make */
+  for(const o of AFFIX_IDS){
+    if(AFFIX[o].s===a.s) continue;
+    for(const r of S.roots){
+      const w=asmRoot(r,[[a.t,a.s],[AFFIX[o].t,AFFIX[o].s]]);
+      if(isWord(w)) return {made:[],needs:{n:AFFIX[o].n,t:AFFIX[o].t,w:displayOf(w)}};
+    }
+  }
+  return {made:[],needs:null};
+}
 const pickWazn=()=>{ const r=reachableWazns(), rich=r.filter(id=>id!=='thulathi'); return pick(rich.length?rich:r); };
 /* Which undrawn card would finish this row on the round's commissioned wazn. Recall becomes
    perception: the board remembers the pattern so the player does not have to. */
@@ -653,9 +687,15 @@ function genOffers(){
   const o:any[]=[];
 
   /* زوائد — the progression itself, so always two and always cheap */
+  /* One affix that works with what you have RIGHT NOW, one that may need a partner. Showing
+     the truth (above) is most of the fix, but a shop where both زوائد are combo-pieces is
+     still a shop with nothing to buy. */
   const apool=front(AFFIX_IDS,'affix');
-  o.push({k:'affix',id:apool[0],cost:2});
-  if(apool[1]) o.push({k:'affix',id:apool[1],cost:2});
+  const useful=apool.filter(id=>affixPreview(id).made.length);
+  const first=useful[0]||apool[0];
+  o.push({k:'affix',id:first,cost:2});
+  const second=apool.find(id=>id!==first);
+  if(second) o.push({k:'affix',id:second,cost:2});
 
   /* ONE relic, and it is the shop's event. From round 3 it can come up نادر: dearer, and it
      reads as a find rather than a line. */
@@ -948,7 +988,15 @@ function offerHTML(x,i){
   if(x.k==='relic'){kind=x.rare?'طلسم نادر':'طلسم';nm=RELICS[x.id].n;ds=RELICS[x.id].d;cls='k-relic'+(x.rare?' rare':'');}
   else if(x.k==='ench'){kind='نقش حرف';nm='حرف '+ENCH[x.id].n;ds=ENCH[x.id].d+' تختار الحرف من كيسك.';}
   else if(x.k==='tool'){kind='أداة';nm=TOOLS[x.id].n;ds=TOOLS[x.id].d+` · ${TOOLS[x.id].ch} شحنات تتجدد كل جولة.`;}
-  else if(x.k==='affix'){const a=AFFIX[x.id];kind='زيادة';nm=a.n+' «'+a.t+'»';ds=a.d+` · تُوضع ${SEATS[a.s]}.`;cls='k-aff';}
+  else if(x.k==='affix'){
+    const a=AFFIX[x.id], pv=affixPreview(x.id);
+    kind='زيادة'; nm=a.n+' «'+a.t+'»'; cls='k-aff';
+    ds=pv.made.length
+      ? `تُوضع ${SEATS[a.s]} · <b class="mk">${pv.made.join(' · ')}</b>`
+      : pv.needs
+        ? `تُوضع ${SEATS[a.s]} · <span class="nomk">وحدها لا تصنع شيئًا من جذورك</span> — مع «${pv.needs.t}» تصنع <b class="mk">${pv.needs.w}</b>`
+        : `تُوضع ${SEATS[a.s]} · <span class="nomk">لا تصنع شيئًا من جذورك الآن</span>`;
+  }
   else if(x.k==='root'){kind='جذر';nm=spaced(x.id);ds='جذر خامس في كيسك: ثلاث بطاقات أصول جديدة.';cls='k-root';}
   else if(x.k==='row'){kind='نقش سطر';nm='سطر '+ROWMODS[x.id].n;ds=ROWMODS[x.id].d;cls='k-row';}
   else if(x.k==='nbup'){kind='حبر';nm='ارفع جذر '+spaced(x.root);ds='+١ مستوى لهذا الجذر في دفترك.';cls='k-up';}
@@ -1061,7 +1109,7 @@ if(location.search.includes('dev=1')) (window as any).__dev={
     const pl=freshPiles(); S.radDraw=pl.rad; S.affDraw=pl.aff; S.curA=drawFrom('a'); S.nextA=drawFrom('a'); syncHand(); render(); },
   row:(i,mod)=>{ S.rowMods[i]=mod; render(); },
   mark:(i,e)=>{ if(S.bag[i]) S.bag[i].ench=e; render(); },
-  state:()=>S,
+  state:()=>S, word:isWord, root:isRoot,
 };
 loadDict().then(()=>{
   if(window.claude?.hot?.snapshot) window.claude.hot.snapshot(()=>({state:S}));

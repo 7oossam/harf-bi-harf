@@ -357,3 +357,6 @@ button:focus-visible,.line:focus-visible{outline:2px solid var(--ink);outline-of
 .kcard.on{border-style:solid;box-shadow:inset 0 0 0 1px var(--lapis)}
 .kashfmark{position:absolute;top:2px;inset-inline-start:4px;font-size:8px;color:var(--lapis)}
 .pilecard{position:relative}
+/* the shop shows words YOU can make, so they must read as words, not as body text */
+.offer .mk{font-family:var(--naskh);font-size:17px;color:var(--ink);font-weight:700;line-height:1.5}
+.offer .nomk{color:var(--rubric)}
