@@ -102,6 +102,25 @@ What replaces it is better than neutral: every turn you choose between advancing
 lengthening the word, with the randomness living inside each pile. `S.cur` stays synced to the
 selected card so drop/stateOf/scoring never need to know about piles.
 
+**A lottery is not a gamble — the distinction that matters most here.** Measured 2026-09-22
+with the two-pile build and `STACK` in place, the MINLEN experiment came back *inverted*:
+`MINLEN=3` (seal the bare root) reached round 6 in 1/6 runs, `MINLEN=5` (hold out for زوائد)
+in **0/6**. Holding out is now actively worse. The reason is visible in the round each run
+dies on — `47 72 70 0 74 69 84 36` — against other rounds of `3660 4017 1851 1136`. That is
+not variance, it is two states with nothing between them: either a big word lands and crushes
+the target, or the round yields ~50.
+
+The cause is that **the player cannot aim at the big word.** You choose the *pile*, not the
+*card*. Closing كتب needs ك then ت then ب and there is no way to call for them, so the root
+closes by lottery and the زيادة is hung on whatever the lottery closed. A gamble is a choice
+with odds you can influence; a lottery is variance you cannot steer. It also explains why
+holding out lost: waiting spends drops and seals on an outcome you have no way to make likelier.
+
+The fix is to raise the FLOOR, not lower the spike — cutting `STACK` just returns the two
+strategies to parity, which is the broken state it was introduced to fix. The candidate is a
+face-up market of three أصول to choose from instead of one, so assembling a root becomes a
+plan rather than a prayer. Not yet built.
+
 **Stacking has to jump, not step** (`STACK` in `scoreWord`). Measured with a flat per-affix
 multiplier, sealing a bare root scored as well as holding out for زوائد — **2/6 runs reached
 round 6 either way**, which means the gamble was not a gamble. In the old letter game the same
@@ -118,7 +137,10 @@ would be decoration.
 
 **Known gaps — the next work:**
 - `TARGETS` were measured for the *letter* game and are certainly wrong for the card game.
-- `STACK` (1/1/2/3.5/6) is a first pass; the MINLEN=3 vs MINLEN=5 gap is how to check it.
+- `STACK` (1/1/2/3.5/6) is a first pass; the MINLEN=3 vs MINLEN=5 gap is how to check it, and
+  it currently reads *inverted* — see the lottery note above. Fix the floor before the spike.
+- `TARGETS` are still the letter game's numbers. Do not retune them until the floor is fixed:
+  a curve fitted to a lottery just picks which lottery tickets win.
 - An affix whose seat is taken in every row is still unplayable — but now it costs you nothing
   to leave it on its pile and draw أصول instead, which is most of why the split works.
 
