@@ -151,14 +151,41 @@ throw up plenty of *accidental* roots (خ+ت+م from three different roots is re
 a good discovery, but without the notebook bonus paying more for your own roots the four
 would be decoration.
 
+**Measure with suspicion: every "balance problem" here has been a bug in disguise.**
+Re-run `tools/bot.mjs` before trusting any number, and read the stall line and the zero-score
+rounds FIRST. The first question is never "are the targets wrong", it is "is the thing I am
+measuring even working". Five times now, and not once was it the curve:
+
+- the bot deadlocked on full rows (`h-dead` is a legal move, `h-full` is not) and reported
+  frozen runs as "reached round 3" — three of six runs, every number polluted;
+- the round could freeze forever when every row refused the tile and burns were spent;
+- `floatAt` threw inside `seal()`, aborting it before `S.lines[i]=[]`, so the same row could
+  be sealed again and again for score — which read as "the new content is far too strong"
+  (6/6 clears, round-8 scores of 7395) and was a scoring exploit;
+- `drop()` did not bail on an empty hand, and `render`'s end-of-round guard was
+  `S.cur && !canAct()`, so a dry pile *skipped* the check instead of triggering it;
+- `canAct()` looked only at the SELECTED card after the two-pile split, so an affix whose seat
+  was taken everywhere ended the round although switching piles was free and legal — whole
+  rounds scored 0 while the run held 22 affix cards.
+
+The last two share a moral: **a guard written for one card in hand does not survive a second
+card appearing.** When the core model changes, re-read every guard, not just the code you
+edited. `bot.mjs` reports `BOT STALLED` and drops that run from the denominator; a run that
+hits the iteration cap is not a result.
+
 **Known gaps — the next work:**
-- `TARGETS` were measured for the *letter* game and are certainly wrong for the card game.
-- `STACK` (1/1/2/3.5/6) is a first pass; the MINLEN=3 vs MINLEN=5 gap is how to check it, and
-  it currently reads *inverted* — see the lottery note above. Fix the floor before the spike.
-- `TARGETS` are still the letter game's numbers. Do not retune them until the floor is fixed:
-  a curve fitted to a lottery just picks which lottery tickets win.
-- An affix whose seat is taken in every row is still unplayable — but now it costs you nothing
-  to leave it on its pile and draw أصول instead, which is most of why the split works.
+- `TARGETS` are still the letter game's numbers, and they are the LAST thing to tune. Measured
+  with the fixed build: raw scores are nearly flat across rounds (~250, 210, 230, 280) while
+  the ladder triples, so the score/target ratio decays 2.5 → 1.4 → 1.3 → 0.9 → 0.6 in every
+  run. Fitting a curve to that just picks which rounds you lose in.
+- The open question is therefore **why player power does not grow.** Affix cost went 4 → 2 with
+  two offers per shop and two cards per purchase, and it barely moved. Next suspects, in order:
+  one زيادة may not change a word enough to matter; four seats may cap growth too early; or the
+  bot never plans toward a root and the floor is a bot artifact — which only play can settle.
+- `STACK` (1/1/2/3.5/6) is a first pass. The MINLEN=3 vs MINLEN=5 gap is how to check it, and
+  it is the single most important number in the game. Fix the floor before touching the spike.
+- An affix whose seat is taken in every row is still unplayable — but it now costs nothing to
+  leave it on its pile and draw أصول instead, which is most of why the split works.
 
 ## Conventions
 
