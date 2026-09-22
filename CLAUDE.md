@@ -102,8 +102,24 @@ What replaces it is better than neutral: every turn you choose between advancing
 lengthening the word, with the randomness living inside each pile. `S.cur` stays synced to the
 selected card so drop/stateOf/scoring never need to know about piles.
 
+**A run opens with NO زوائد, and "beat the target" is not the measure.** Hussam's correction,
+and it invalidated part of the measurement below: beating round one with a two-affix word is
+not evidence of anything, because in round one the player is not supposed to own زوائد at all.
+An earlier draft handed out three affix cards at start — a band-aid for the single mixed pile
+thinning the أصول — and splitting the piles removed the reason for it, so it is gone. Round one
+is bare roots: three cards, a real word, a small sure score. Every زيادة after that is bought,
+and that IS the progression — the word gets longer because you made it longer.
+
+So `tools/bot.mjs` no longer reports whether a round was beaten. It reports
+`r3:378/175(x2.2)+6z` — the score, that round's target, the ratio, and how many affix cards
+the run owned at the time. A round read without its target says nothing: crushing round one is
+expected, limping over round six is the run. The question the ratio answers is the one that
+matters — **does the player's power grow in step with the ladder, or fall behind it?**
+
 **A lottery is not a gamble — the distinction that matters most here.** Measured 2026-09-22
-with the two-pile build and `STACK` in place, the MINLEN experiment came back *inverted*:
+with the two-pile build and `STACK` in place — but WITH the starting affixes that have since
+been removed, so read it as an upper bound on the variance — the MINLEN experiment came back
+*inverted*:
 `MINLEN=3` (seal the bare root) reached round 6 in 1/6 runs, `MINLEN=5` (hold out for زوائد)
 in **0/6**. Holding out is now actively worse. The reason is visible in the round each run
 dies on — `47 72 70 0 74 69 84 36` — against other rounds of `3660 4017 1851 1136`. That is

@@ -84,21 +84,29 @@ export const SEATS=['بادئة','بعد الفاء','بعد العين','لاح
 /* ================= WHO YOU ARE — الكُتّاب =================
    A character is four roots and a rule. The four roots are the whole point: you can SEE the
    bag, you are not fishing in an alphabet. Twelve radical cards, and the أصول you know by
-   heart within one round. */
+   heart within one round.
+
+   A run OPENS WITH NO زوائد. Round one is bare roots — three cards, a real word, a small sure
+   score — and every زيادة after that is bought. That IS the progression: the word gets longer
+   because you made it longer. An earlier draft handed out three affix cards at start (a
+   band-aid for the single mixed pile thinning the أصول), which erased round one: a two-affix
+   word scored 1817 against a target of 100. Splitting the piles removed the reason for the
+   band-aid, so it is gone. الشاعر keeps one, because "زوائد fall twice as often" needs
+   something to fall. */
 export const CHARS=[
-  {id:'warraq',n:'الوَرّاق',roots:['كتب','درس','نسخ','جمع'],aff:['al','ta','a1'],seals:5,gold:4,
+  {id:'warraq',n:'الوَرّاق',roots:['كتب','درس','نسخ','جمع'],aff:[],seals:5,gold:4,
    d:'أول ختم في كل جولة لا ينفق ختمًا.',
    w:'جذور الكتابة، ومعه «ال» و«ة» من البداية. ابدأ به.'},
-  {id:'hakim',n:'الحكيم',roots:['علم','حكم','فهم','عقل'],aff:['y2','al','mim'],seals:5,gold:4,
+  {id:'hakim',n:'الحكيم',roots:['علم','حكم','فهم','عقل'],aff:[],seals:5,gold:4,
    d:'كل كلمة من خمسة أحرف فأكثر ×٢.',
    w:'جذور المعرفة، وأخصبها علم (٧٣٤ صيغة). يكافئ الكلمة الطويلة.'},
-  {id:'tajir',n:'التاجر',roots:['ربح','حسب','دفع','عمل'],aff:['un','al','a1'],seals:4,gold:10,
+  {id:'tajir',n:'التاجر',roots:['ربح','حسب','دفع','عمل'],aff:[],seals:4,gold:10,
    d:'كل بطاقة زيادة في كلمتك المختومة تمنحك دينارًا.',
    w:'أختام أقل ومال أكثر: عنده الزوائد دخل لا زينة.'},
-  {id:'rahhal',n:'الرحّالة',roots:['سفر','وصل','طرق','بعد'],aff:['mim','a1','ta'],seals:5,gold:4,
+  {id:'rahhal',n:'الرحّالة',roots:['سفر','وصل','طرق','بعد'],aff:[],seals:5,gold:4,
    d:'تحمل خمسة جذور لا أربعة.',
    w:'كيس أوسع وجذور أكثر: احتمالات أكثر وتركيز أقل.'},
-  {id:'shair',n:'الشاعر',roots:['شعر','قول','سمع','ذكر'],aff:['a2','w2','a1'],seals:5,gold:4,
+  {id:'shair',n:'الشاعر',roots:['شعر','قول','سمع','ذكر'],aff:['a1'],seals:5,gold:4,
    d:'بطاقات الزيادة تسقط ضعف ما تسقط.',
    w:'كومته غنية بالزوائد: يبني الأوزان الطويلة قبل غيره.'},
 ];

@@ -26,7 +26,7 @@ for (let run = 0; run < RUNS; run++) {
   await page.click('[data-act="starters"]');
   await page.click(`[data-starter="${STARTER}"]`);
 
-  let round = 1, guard = 0, scores = [], stuck = 0, stalled = '', lastSig = '';
+  let round = 1, guard = 0, scores = [], targets = [], affOwned = [], stuck = 0, stalled = '', lastSig = '';
   while (guard++ < 900) {
     // any overlay card takes priority
     if (await page.locator('.card').count()) {
@@ -59,6 +59,9 @@ for (let run = 0; run < RUNS; run++) {
     const left = num((await page.locator('.purse').innerText()).split('ختم')[1] || '0');
     const score = num(await page.locator('.tally .now').innerText());
     scores[round] = Math.max(scores[round] || 0, score);
+    if (!targets[round]) targets[round] = num(await page.locator('.tally .goal').innerText().catch(() => '0'));
+    const affTxt = await page.locator('[data-sel="a"] .plabel').innerText().catch(() => '');
+    affOwned[round] = Math.max(affOwned[round] || 0, num(affTxt));
     // a round that stops changing is a stall, not progress — say so instead of counting it
     const sig = `${round}/${seals}/${left}/${score}`;
     if (sig === lastSig) { if (++stuck > 40) { stalled = `round ${round} frozen at ${sig}`; break; } }
@@ -114,7 +117,13 @@ for (let run = 0; run < RUNS; run++) {
   }
   if (guard >= 900 && !stalled) stalled = 'hit the iteration cap';
   reached.push(stalled ? 0 : round);
-  const peaks = scores.map((v, i) => v == null ? null : `r${i}:${v}`).filter(Boolean).join(' ');
+  /* score/target, and ×N = how far over the bar. A round read without its target says nothing:
+     crushing round 1 is expected, limping over round 6 is the run. */
+  const peaks = scores.map((v, i) => {
+    if (v == null) return null;
+    const t = targets[i] || 0, r = t ? (v / t).toFixed(1) : '?';
+    return `r${i}:${v}/${t}(x${r})${affOwned[i] ? '+' + affOwned[i] + 'z' : ''}`;
+  }).filter(Boolean).join(' ');
   console.log(`run ${run + 1}: ${stalled ? 'BOT STALLED' : 'reached round ' + round} | peak score per round -> ${peaks}`
     + (stalled ? `\n   stall: ${stalled}` : '') + (errs.length ? `\n   JS error: ${errs[0].slice(0, 120)}` : ''));
   await page.close();
