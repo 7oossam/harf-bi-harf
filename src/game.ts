@@ -35,7 +35,7 @@ const seatOf=(c,want)=>has('mulhaq')&&want!=null?want:afOf(c).s;
 const seatsUsed=L=>new Set(L.filter(c=>c.k==='a').map(c=>seatOf(c,c.seat)));
 const seatFree=(L,c,want)=>!!c&&!seatsUsed(L).has(seatOf(c,want));
 /* Assemble the row into a word. Affixes keep insertion order inside a seat. */
-function asmLine(L,extra,extraSeat){
+function asmLine(L,extra=null,extraSeat=null){
   const rad=L.filter(isRad), aff=L.filter(c=>c.k==='a').map(c=>({c,s:seatOf(c,c.seat)}));
   if(extra){ if(isRad(extra)) rad.push(extra); else aff.push({c:extra,s:seatOf(extra,extraSeat)}); }
   const at=k=>aff.filter(a=>a.s===k).map(a=>cardTxt(a.c)).join('');
@@ -177,7 +177,7 @@ const wordOK=w=>isWord(w);
 
 /* Where the incoming card would go. A radical always appends (or prepends, with the start
    zone); an affix takes its printed seat unless المُلحَق frees it. */
-function placed(i,card,atStart){
+function placed(i,card,atStart=false){
   const L=S.lines[i];
   if(isRad(card)) return atStart?[{...card},...L]:[...L,{...card}];
   return [...L,{...card,seat:atStart?0:null}];
@@ -204,12 +204,25 @@ function waznHint(i){
   return null;
 }
 
+/* الطُّفَيْلي: the card that would have killed a row hops to the first row that will take it.
+   Lost with the card rewrite — tufayli still called it, so owning the relic crashed the run. */
+function parasiteTarget(from,card){
+  const n=nLines();
+  for(let k=1;k<n;k++){
+    const j=(from+k)%n;
+    if(S.junk[j]||S.lock[j]>0) continue;
+    const st=stateOf(j,card,false);
+    if(st==='word'||st==='alive') return j;
+  }
+  return null;
+}
+
 /* ================= ROW STATE =================
    A row seals when it holds a full root (three أصول, four with الرِّحاب) and the assembled
    word is real. It stays alive while its radicals can still reach a root. It refuses a
    radical once the root is full — but it still takes زوائد, which is the whole shape of the
    decision: the root closes, the word does not. */
-function stateOf(i,card,atStart){
+function stateOf(i,card,atStart=false){
   if(S.junk[i]) return 'junk';
   if(S.lock[i]>0) return 'locked';
   if(!card) return 'alive';
@@ -220,7 +233,7 @@ function stateOf(i,card,atStart){
   if(!radAlive(L2)) return 'dead';
   return 'alive';
 }
-function hintFor(i,card,atStart){
+function hintFor(i,card,atStart=false){
   if(!card) return null;
   const st=stateOf(i,card,atStart);
   if(st!=='dead') return st;
@@ -481,7 +494,7 @@ function winRound(){
   S.earn={base,over,interest,total:base+over+interest};
   S.gold+=S.earn.total; audio('win');
   if(S.round>=TARGETS.length){ S.phase='victory'; render(); return; }
-  const cands=Object.entries(S.roundRoots).filter(([r])=>!nbOf(r)).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([r,c])=>({root:r,count:c}));
+  const cands=(Object.entries(S.roundRoots) as [string,number][]).filter(([r])=>!nbOf(r)).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([r,c])=>({root:r,count:c}));
   S.nbOffer=cands.length?cands:null; S.nbReplace=null;
   S.phase='roundwon'; render();
 }
@@ -718,7 +731,7 @@ function renderOverlay(){
       <h3>الدفتر</h3><div class="kv">${S.notebook.map(x=>`<div><span>${spaced(x.root)}</span><b>م${x.lvl} · +${5*x.lvl} نقاط +${x.lvl} مضاعف</b></div>`).join('')}</div>
       <h3>الأوزان</h3><div class="pat">${PATTERNS.map(p=>{const lv=S.patLv[p.id]||1; return `<div><b>${p.n}</b>م${lv} · +${Math.round(p.c*(1+.5*(lv-1)))} نقاط +${p.m+lv-1} مضاعف</div>`;}).join('')}</div>
       <h3>جذورك</h3><div class="pat">${S.roots.map(r=>`<div><b>${spaced(r)}</b>${nbOf(r)?'في دفترك · م'+nbOf(r).lvl:'ثلاث بطاقات أصول'}</div>`).join('')}</div>
-      <h3>زوائدك</h3><div class="pat">${S.bag.filter(c=>c.k==='a').length?[...new Set(S.bag.filter(c=>c.k==='a').map(c=>c.a))].map(a=>`<div><b>${AFFIX[a].t}</b>${AFFIX[a].n} · ${SEATS[AFFIX[a].s]}</div>`).join(''):'<div><b>—</b>لا زوائد بعد: اشترِ واحدة من المتجر</div>'}</div>
+      <h3>زوائدك</h3><div class="pat">${S.bag.filter(c=>c.k==='a').length?([...new Set(S.bag.filter(c=>c.k==='a').map(c=>c.a))] as string[]).map(a=>`<div><b>${AFFIX[a].t}</b>${AFFIX[a].n} · ${SEATS[AFFIX[a].s]}</div>`).join(''):'<div><b>—</b>لا زوائد بعد: اشترِ واحدة من المتجر</div>'}</div>
       <h3>المسارات</h3><div class="pathsgrid">${pathStats().map(p=>`<div style="--pc:${p.c}" class="${p.id===lead?'lead':''}"><b>${p.n}${p.lvl>0?' · م'+p.lvl+' · +'+Math.round(p.lvl*15)+'٪':''}</b><small>${p.d}</small></div>`).join('')}</div>
       ${S.permMult?`<p class="sub">مضاعف دائم: +${fmt(S.permMult)}</p>`:''}
       ${S.rowMods.slice(0,nLines()).some(Boolean)?`<h3>نقوش السطور</h3><div class="kv">${S.rowMods.slice(0,nLines()).map((m,r)=>`<div><span>السطر ${r+1}</span><b>${m?ROWMODS[m].n:'—'}</b></div>`).join('')}</div>`:''}
