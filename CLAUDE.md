@@ -129,6 +129,32 @@ baseline, and the row log shows `"سخر" 3/3→3/3` — the root staying put, w
 point. The rare tier in `genOffers` is bound to these, so a "rare" offer is a rule-changer and
 not a price bump.
 
+**One pass was not enough, and Hussam said so twice.** After that rewrite the *ordinary* tier
+still held five pure numbers — حجر الرحى (+0.5 mult), الصَّرْفي (×3), الاشتقاق (×2), اليتيم (×3),
+الوزّان (×2) — and because the كاسرات were gated behind one slot at 45%, most shop visits showed
+exactly those. He was looking at a real shop screen full of multipliers while I was pleased with
+eight relics he could rarely see. So the last five became rules too, the rate went to 70%, and
+the number-shaped rows (`manbat` ×3) and marks (`seed` ×2) went with them:
+
+| replaced | by | the rule |
+|---|---|---|
+| الصَّرْفي ×3 | **الإدغام** | every seat takes TWO زوائد, not one — eight seats around the root |
+| اليتيم ×3 | **الوَقْف** | the longest row survives into the next round, cards and all |
+| حجر الرحى +0.5 | **المُسْوَدّة** | a broken row's أصول return to the pile instead of being lost |
+| الاشتقاق ×2 | **الجِناس** | the second word on the same root costs no seal |
+| الوزّان ×2 | **القافية** | a word starting on the last letter of the previous one: ×3, and free |
+| سطر المَنْبَت ×3 | **المَشْتَل** | sealing here plants the word's root in your bag and notebook |
+| وسم البَذْرة ×2 | **الشَّاهِد** | that زيادة is accepted in ANY seat |
+
+الإدغام is the one worth noting: the base game hangs one زيادة per seat, and this relic hands
+back exactly what Hussam asked for at the very start — *"the row accepts any number of
+زوائد"* — as something earned rather than something it always was. Verified: without it a row
+takes one «ال» (`h-alive · h-seat · h-seat`), with it two (`h-alive · h-alive · h-seat`).
+
+**The lesson for adding content here:** a multiplier is not content. If a new thing can be
+described as "×N when Y", it belongs in the base scoring or nowhere. Ask instead: *what rule
+does this break?*
+
 **`?dev=1` exposes `window.__dev`** (`grant`, `give`, `state`). Granting a relic is otherwise a
 whole run of shopping, and the first attempt to verify these eight "passed" all of them without
 granting a single one — the rows behaved identically and I nearly believed it.

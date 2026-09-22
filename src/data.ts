@@ -171,13 +171,21 @@ export const RELICS={
   tadeef:{n:'التَّضعيف',hook:'affix',d:'أول زيادة في كل كلمة لا تُحتسب: تعود إلى كومة الجولة فورًا.'},
   nussakh:{n:'النُّسّاخ',hook:'affix',path:'pattern',d:'نسخة إضافية من كل زيادة تملكها، في كل جولة.'},
   misann:{n:'المِسَنّ',hook:'seal',d:'كل ختم يردّ شحنة واحدة إلى كل أداة تملكها.'},
-  raha:{n:'حجر الرحى',hook:'seal',path:'chain',d:'كل سطر تخسره — كسرًا أو حشوًا — يمنحك +٠٫٥ مضاعف دائم.'},
 
-  /* ===== the two build-defining multipliers that earn their place ===== */
-  sarfi:{n:'الصَّرْفي',hook:'affix',path:'pattern',d:'كلمة فيها ثلاث زوائد فأكثر: ×٣.'},
-  ishtiqaq:{n:'الاشتقاق',hook:'root',path:'root',d:'كلمة من جذر ختمته في هذه الجولة: ×٢.'},
-  yatim:{n:'اليتيم',hook:'score',path:'bag',d:'إذا كان في كيسك ثلاثة جذور أو أقل: كل كلمة ×٣.'},
-  wazzan:{n:'الوزّان',hook:'score',path:'pattern',d:'مكافأة الوزن تُحسب مرتين.'},
+  /* ===== the last five were pure numbers (+0.5 mult, ×3, ×2) and Hussam called it twice.
+     Replaced, each with a rule. الإدغام is the one I like most: the base game hangs ONE زيادة
+     per seat, and this relic hands back exactly what he asked for at the very start — "the row
+     takes any number of زوائد" — as something you earn rather than something it always was. */
+  idgham:{n:'الإدغام',hook:'affix',path:'pattern',
+    d:'كل مقعد يقبل زيادتين لا واحدة: ثمانية مقاعد حول الجذر بدل أربعة.'},
+  waqf:{n:'الوَقْف',hook:'row',path:'root',
+    d:'عند انتهاء الجولة يبقى أطول سطر كما هو إلى الجولة التالية.'},
+  muswadda:{n:'المُسْوَدّة',hook:'row',path:'chain',
+    d:'السطر الذي ينكسر لا تضيع أصوله: تعود إلى كومة الجولة.'},
+  jinas:{n:'الجِناس',hook:'seal',path:'root',
+    d:'الكلمة الثانية على الجذر نفسه في الجولة تُختم بلا أن تُنفق ختمًا.'},
+  qafiya:{n:'القافية',hook:'seal',path:'chain',
+    d:'كلمة تبدأ بآخر حرف من سابقتها: ×٣، ولا تُنفق ختمًا.'},
 };
 
 /* ================= الأدوات — TOOLS ================= */
@@ -202,7 +210,7 @@ export const ROWMODS={
   khizana:{n:'الخِزانة',path:'pattern',d:'الزوائد المستعملة هنا تعود إلى كومة الجولة: لا تُحتسب.'},
   minwal:{n:'المِنوال',path:'pattern',d:'كل كلمة تُختم هنا تُحسب كأنها على وزن الجولة.'},
   mizan:{n:'المِيزان',path:'pattern',d:'وزن الجولة يدفع هنا ×٣ بدل ×٢.'},
-  manbat:{n:'المَنْبَت',path:'root',d:'كلمة من جذر في دفترك تُختم هنا ×٣.'},
+  mashtal:{n:'المَشْتَل',path:'root',d:'الختم هنا يضيف جذر الكلمة إلى دفترك وكيسك.'},
   gold:{n:'الذَّهَب',path:'bag',d:'+٣ دنانير عن كل ختم في هذا السطر.'},
   fort:{n:'الحِصن',path:'chain',d:'هذا السطر لا ينكسر: البطاقة التي تقتله ترتدّ وتضيع وحدها.'},
 };
@@ -214,7 +222,7 @@ export const ENCH={
   tawam:{n:'التَّوأم',d:'تُحسب بطاقتين: تملأ مقعدين، أو أصلين من الجذر.'},
   gold:{n:'ذهبي',d:'قيمة هذه البطاقة ×٣.'},
   anchor:{n:'مِرْساة',d:'السطر الذي فيه هذه البطاقة لا ينكسر.'},
-  seed:{n:'بَذْرة',d:'إن كانت أصلًا: قيمتها ×٢ ومضاعف كلمتها +١.'},
+  shahid:{n:'الشَّاهِد',d:'إن كانت زيادة: تُقبل في أي مقعد شئت، لا في مقعدها.'},
   glass:{n:'زجاجي',d:'الكلمة ×٢، ثم تنكسر البطاقة وتخرج من كيسك نهائيًّا.'},
 };
 
@@ -228,30 +236,30 @@ export const COMBOS=[
    d:'الزوائد لا تُستهلَك وكل ختم يكلّف ديناريْن — وسطر الذهب يدفعهما ويزيد.'},
   {n:'الكَشْف المُلحَق', parts:['relic:kashf','relic:mulhaq'],
    d:'تختار الزيادة التي تريد وتضعها في المقعد الذي تريد: الوزن صار قرارًا لا قرعة.'},
-  {n:'الصَّمت الأعزل', parts:['relic:samt','relic:yatim'],
-   d:'لا زوائد أصلًا والجذر العاري ×٦، وثلاثة جذور أو أقل ×٣: لعبةٌ أخرى تمامًا.'},
+  {n:'الصَّمت الراسخ', parts:['relic:samt','row:rahim'],
+   d:'لا زوائد أصلًا والجذر العاري ×٦، وسطر الرَّحِم يُبقيه: تختمه مرة بعد مرة.'},
   {n:'الشَّجرة الراسخة', parts:['relic:shajara','relic:ablind'],
    d:'كل جذر جديد يدخل كيسك، وكلّها تُحسب كأنها في دفترك.'},
   {n:'الارتجال الحُرّ', parts:['relic:irtijal','relic:qalb'],
    d:'أي ترتيب يكوّن جذرًا، وأي تركيب عليه يُقبل: لم يبق للمعجم سلطان.'},
-  {n:'الطاحونة', parts:['relic:qalam','relic:raha'],
-   d:'السطر لا ينكسر بل يصير حشوًا، والرحى تدفع عن كل خراب: الخسارة صارت محرّكًا.'},
+  {n:'المُسوَدّة الدائمة', parts:['relic:muswadda','relic:qalam'],
+   d:'السطور لا تنكسر بل تصير حشوًا، وأصول ما ينكسر تعود: لا شيء يضيع منك.'},
   {n:'المرآتان', parts:['relic:qalb','tool:mirat'],
    d:'القلب يقبل أي ترتيب يكوّن جذرًا، والمرآة تقلب السطر لتبلغه.'},
   {n:'مِداد لا ينفد', parts:['relic:midad','row:mizan'],
    d:'الوزن يدفع ×٣ ويردّ الختم: على هذا السطر تختم بلا أن تُنقص حصّتك.'},
-  {n:'الجذر الراسخ', parts:['relic:ishtiqaq','mark:watad'],
-   d:'الوَتَد لا يُحتسب فيعود إليك كل ختم، فتكرّر الجذر نفسه والاشتقاق يضاعفه.'},
-  {n:'المَنْبَت', parts:['relic:ablind','row:manbat'],
-   d:'كل جذر صار في دفترك، وسطر المنبت يضاعف ما في الدفتر ×٣.'},
+  {n:'الجذر الراسخ', parts:['relic:jinas','mark:watad'],
+   d:'الوَتَد لا يُحتسب فيعود إليك كل ختم، والجِناس يجعل تكرار الجذر مجّانيًّا.'},
+  {n:'المَشْتَل', parts:['relic:shajara','row:mashtal'],
+   d:'كل جذر تختمه يدخل كيسك، وسطر المَشْتَل يضيفه إلى دفترك: الكيس يزرع نفسه.'},
   {n:'صَرْف العملة', parts:['char:tajir','row:gold'],
    d:'كل زيادة دينار وكل ختم ثلاثة: التاجر يشتري ذخيرته من كلماته.'},
   {n:'السِّنان', parts:['relic:misann','tool:isfinja'],
    d:'الإسفنجة شحنة واحدة، والمِسَنّ يردّها مع كل ختم: امسح ما شئت.'},
   {n:'الرباعي', parts:['relic:rihab','relic:qalb'],
    d:'أربعة أصول في السطر وأي ترتيب يُقبل: الجذور الرباعية كلها مفتوحة.'},
-  {n:'الوزن الكامل', parts:['relic:sarfi','relic:kashf'],
-   d:'ثلاث زوائد ×٣، وأنت تختار أيّها — فالثلاث في متناولك متى شئت.'},
+  {n:'الوزن الكامل', parts:['relic:idgham','relic:kashf'],
+   d:'ثمانية مقاعد، وأنت تختار أي زيادة تملأ بها أيّها: الوزن صار نحتًا لا قرعة.'},
 ];
 export const ownedIds=S=>{
   const o=['char:'+S.charId];
@@ -278,19 +286,19 @@ export const BOSSES={
 export const PATHS=[
   {id:'root',n:'الجذر',c:'var(--glaze)',
     d:'مستويات دفترك ترفع هذا المسار. كلمة من جذر في الدفتر تكسب مضاعفًا يكبر معه.',
-    progress:(S,has)=>S.notebook.reduce((a,x)=>a+x.lvl,0)+(has('mihbara')?3:0)+(has('ablind')?3:0)+(has('ishtiqaq')?2:0),
+    progress:(S,has)=>S.notebook.reduce((a,x)=>a+x.lvl,0)+(has('ablind')?3:0)+(has('jinas')?2:0)+(has('shajara')?2:0),
     match:ctx=>!!ctx.nb},
   {id:'pattern',n:'الوزن',c:'var(--saffron)',
     d:'الزوائد التي تجمعها ترفع هذا المسار. كل كلمة فيها زيادة تكسب مضاعفًا يكبر معه.',
-    progress:(S,has)=>S.bag.filter(c=>c.k==='a').length+(has('mushtaqq')?3:0)+(has('sarfi')?3:0)+(has('zaida')?2:0)+(has('mulhaq')?2:0),
+    progress:(S,has)=>S.bag.filter(c=>c.k==='a').length+(has('idgham')?3:0)+(has('kashf')?3:0)+(has('mulhaq')?2:0)+(has('nussakh')?2:0),
     match:ctx=>ctx.naff>0},
   {id:'chain',n:'السلسلة',c:'var(--crack)',
     d:'أعلى سلسلة بلغتها ترفع هذا المسار. كلمة تختمها وأنت في سلسلة تكسب مضاعفًا يكبر معه.',
-    progress:(S,has)=>(S.stats.maxChain||0)+(has('qalam')?3:0)+(has('khayt')?3:0)+(has('raha')?2:0),
+    progress:(S,has)=>(S.stats.maxChain||0)+(has('qalam')?3:0)+(has('khayt')?3:0)+(has('qafiya')?2:0)+(has('muswadda')?2:0),
     match:ctx=>ctx.chain>=2},
   {id:'bag',n:'الكيس',c:'var(--violet)',
     d:'البطاقات المنقوشة وقلّة الجذور ترفعان هذا المسار.',
-    progress:(S,has)=>S.bag.filter(c=>c.ench).length*2+(S.roots.length<=3?4:0)+(has('yatim')?3:0)+(has('khabiya')?2:0)+(has('qura')?2:0),
+    progress:(S,has)=>S.bag.filter(c=>c.ench).length*2+(S.roots.length<=3?4:0)+(has('shajara')?3:0)+(has('waqf')?2:0),
     match:ctx=>ctx.bagFlavor},
 ];
 export const pathLvl=p=>Math.min(5,Math.floor(p/3));

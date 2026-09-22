@@ -32,8 +32,13 @@ const seatOf=(c,want)=>has('mulhaq')&&want!=null?want:afOf(c).s;
    فاء, not three — and a truly unlimited row turned into affix soup that still read as "alive",
    because the liveness test only ever looked at the radicals. Four seats, one each: the row
    becomes a template you watch filling, and every زيادة is a real choice of where it goes. */
-const seatsUsed=L=>new Set(L.filter(c=>c.k==='a').map(c=>seatOf(c,c.seat)));
-const seatFree=(L,c,want)=>!!c&&!seatsUsed(L).has(seatOf(c,want));
+const seatCap=()=>has('idgham')?2:1;
+const seatFree=(L,c,want)=>{
+  if(!c) return false;
+  if(c.ench==='shahid') return L.filter(x=>x.k==='a').length<4*seatCap();  // الشَّاهِد sits anywhere
+  const k=seatOf(c,want);
+  return L.filter(x=>x.k==='a'&&seatOf(x,x.seat)===k).length<seatCap();
+};
 /* Assemble the row into a word. Affixes keep insertion order inside a seat. */
 function asmLine(L,extra=null,extraSeat=null){
   const rad=L.filter(isRad), aff=L.filter(c=>c.k==='a').map(c=>({c,s:seatOf(c,c.seat)}));
@@ -175,8 +180,15 @@ function newRun(starter){
 }
 function startRound(){
   const r=S.round;
+  /* الوَقْف — the longest row survives into the next round, cards and all. */
+  let carry=null;
+  if(S&&S.lines&&has('waqf')){
+    let best=-1,bl=0;
+    for(let i=0;i<S.lines.length;i++) if(!S.junk[i]&&S.lines[i].length>bl){bl=S.lines[i].length;best=i;}
+    if(best>=0){ carry=[[],[],[],[]]; carry[best]=S.lines[best].map(c=>({...c})); }
+  }
   Object.assign(S,{target:TARGETS[r-1],score:0,drops:S.dropsMax,burns:S.burnsMax,
-    lines:[[],[],[],[]],junk:[false,false,false,false],lock:[0,0,0,0],fixed:[0,0,0,0],chain:0,sealedSinceDrop:true,
+    lines:carry?[carry[0],carry[1],carry[2],carry[3]]:[[],[],[],[]],junk:[false,false,false,false],lock:[0,0,0,0],fixed:[0,0,0,0],chain:0,sealedSinceDrop:true,
     rootCounts:{},roundRoots:{},lastEnd:null,lastRoot:null,mirajN:0,ash:0,dropCount:0,log:[],top:[],held:null,freeSeal:isChar('warraq'),mamalUsed:false,
     radDraw:[],affDraw:[],sel:'r',curR:null,curA:null,nextR:null,nextA:null,seals:sealsFor(),boss:null,wazn:'thulathi',phase:'intro',shop:null,picker:null,nbOffer:null});
   if(BOSS_ROUNDS.includes(r)){
@@ -388,12 +400,11 @@ function scoreWord(tiles,s,row){
      words at all. So the second affix doubles, the third triples, the fourth is a run-maker. */
   const STACK=[1,1,2,3.5,6];
   if(naff>=2){ const b=STACK[Math.min(naff,4)]; x*=b; tags.push(`صَرْف ${naff} زوائد ×${fmt(b)}`); }
-  if(has('sarfi')&&naff>=3){ x*=3; tags.push('الصَّرْفي ×٣'); }
 
   const p=mod==='minwal'?waznOf(S.wazn):patOf(s);
   if(p){ const lv=S.patLv[p.id]||1, com=p.id===S.wazn||mod==='minwal';
     const commission=com?(mod==='mizan'?3:2):1;
-    const k=(has('wazzan')?2:1)*commission;
+    const k=commission;
     chips+=Math.round(p.c*(1+.5*(lv-1)))*k; mult+=(p.m+lv-1)*k; tags.push('وزن '+p.n+(lv>1?' م'+lv:''));
     if(com) tags.push('طلب الجولة ×'+commission); }
   if(hasAl(s)){ mult+=1; tags.push('ال +١'); }
@@ -403,15 +414,14 @@ function scoreWord(tiles,s,row){
   let nb=nbOf(root);
   if(!nb&&has('ablind')&&root){ nb={root,lvl:1,xp:0,blind:true}; tags.push('جذر أعمى'); }
   if(nb){ chips+=5*nb.lvl; mult+=nb.lvl; if(!nb.blind) tags.push('دفتر '+spaced(root)+' م'+nb.lvl); }
-  if(tiles.some(c=>c.ench==='seed'&&isRad(c))){ mult+=1; tags.push('بَذْرة +١'); }
 
   if(S.permMult>0){ mult+=S.permMult; tags.push('دائم +'+fmt(S.permMult)); }
   if(root){const prev=S.rootCounts[root]||0; if(prev>0){x*=(1+prev); tags.push('رنين ×'+(1+prev));}}
-  if(has('ishtiqaq')&&root&&S.roundRoots[root]){ x*=2; tags.push('اشتقاق ×٢'); }
   if(has('miraj')&&root&&root===S.lastRoot){ const m=2**Math.min(6,(S.mirajN||0)+1); x*=m; tags.push('مِعراج ×'+m); }
   if(has('samt')&&!naff){ x*=6; tags.push('الصَّمت ×٦'); }
   if(has('irtijal')&&!isWord(s)){ x*=.5; tags.push('ارتجال ×½'); }
   if(has('qalib')&&p&&p.id===S.wazn){ x*=5; tags.push('القالَب ×٥'); }
+  if(has('qafiya')&&S.lastEnd&&s[0]===S.lastEnd){ x*=3; tags.push('قافية ×٣'); }
   if(isChar('hakim')&&len>=5){ x*=2; tags.push('الحكيم ×٢'); }
 
   const bagFlavor=tiles.some(c=>c.ench)||S.roots.length<=3, pctx={nb,p,naff,chain:S.chain,bagFlavor};
@@ -421,8 +431,6 @@ function scoreWord(tiles,s,row){
   }
   if(S.chain>0){const m=1+.5*S.chain; x*=m; tags.push('سلسلة ×'+fmt(m));}
   const glass=tiles.filter(c=>c.ench==='glass').length; if(glass){x*=2**glass; tags.push('زجاج ×'+(2**glass));}
-  if(mod==='manbat'&&nb&&!nb.blind){x*=3;tags.push('مَنْبَت ×٣');}
-  if(has('yatim')&&S.roots.length<=3){x*=3;tags.push('يتيم ×٣');}
   if(S.boss&&S.boss.id==='rhyme'&&S.lastEnd&&s[0]!==S.lastEnd){x*=.5;tags.push('بلا قافية ×½');}
   return {chips,mult:mult*x,score:Math.round(chips*mult*x),tags,root,pat:p?p.id:null,naff};
 }
@@ -470,7 +478,7 @@ function drop(i,atStart){
     else if(S.rowMods[i]==='fort'||S.lines[i].some(t=>t.ench==='anchor')){ fx={line:i,kind:'crack'}; floatAt(i,{bad:true,text:'ارتدّت البطاقة'}); }
     else if(has('tufayli') && parasiteTarget(i,card)!=null){ const j=parasiteTarget(i,card); S.lines[j]=placed(j,card,false); fx={line:j,kind:'drop'}; floatAt(j,{bad:true,text:'قفز الطفيلي'}); }
     else if(has('qalam')){ S.lines[i]=[...S.lines[i],card]; S.junk[i]=true; fx={line:i,kind:'crack'}; audio('crack');
-      floatAt(i,{bad:true,text:'صار حشوًا'+rowLost(i,0)}); }
+      floatAt(i,{bad:true,text:'صار حشوًا'}); }
     else crack(i);
   }
   S.drops=Math.max(0,pileLeft()+(S.curR?1:0)+(S.curA?1:0)-1); S.dropCount++;
@@ -486,19 +494,12 @@ function termite(){
   toast(`<b>الأرَضة</b> أكلت «${eaten}»`);
   if(!isAlive(lineStr(best))) crack(best);
 }
-/* A row can be lost three ways now — broken, turned to حشو by القلم، or bounced off حِصن.
-   الرحى pays for the loss itself, not for one particular spelling of it, otherwise owning
-   القلم silently switches الرحى off and the chain path recommends a pair that cancels. */
-function rowLost(i,scrap){
-  if(!has('raha')) return scrap?`، نشارة +${scrap}`:'';
-  S.permMult+=.5;
-  return '، الرحى +٠٫٥'+(scrap?` ونشارة +${scrap}`:'');
-}
 function crack(i){
   const scrap=S.lines[i].reduce((a,c)=>a+cardVal(c),0);
   S.score+=scrap;
+  if(has('muswadda')) for(const c of S.lines[i]) if(isRad(c)&&c.id) S.radDraw.push(c.id);
   S.lines[i]=[]; S.chain=0; fx={line:i,kind:'crack'}; audio('crack');
-  floatAt(i,{bad:true,text:'انكسر السطر'+rowLost(i,scrap)});
+  floatAt(i,{bad:true,text:'انكسر السطر'+(scrap?`، نشارة +${scrap}`:'')+(has('muswadda')?'، وعادت أصوله':'')});
 }
 function advance(prev){
   const k=prev&&prev.k==='a'?'a':'r';
@@ -589,7 +590,10 @@ function seal(i,auto){
   S.score+=r.score; S.stats.words++; S.stats.total+=r.score;
   if(!S.stats.best||r.score>S.stats.best.score) S.stats.best={w:displayOf(s),score:r.score};
   if(r.root){
-    if(has('shajara')&&!S.seenRoots[r.root]&&!S.roots.includes(r.root)&&S.roots.length<8) adoptRoot(r.root);
+    if((has('shajara')||S.rowMods[i]==='mashtal')&&!S.roots.includes(r.root)&&S.roots.length<8){
+      adoptRoot(r.root);
+      if(S.rowMods[i]==='mashtal'&&S.notebook.length<nbSlots()) S.notebook.push({root:r.root,lvl:1,xp:0});
+    }
     S.rootCounts[r.root]=(S.rootCounts[r.root]||0)+1; S.roundRoots[r.root]=(S.roundRoots[r.root]||0)+1; S.seenRoots[r.root]=1;
     const nb=nbOf(r.root);
     if(nb){ nb.xp+=has('mihbara')?2:1; if(nb.xp>=3){nb.xp-=3; nb.lvl++; setTimeout(()=>toast(`ارتقى الجذر <b>${spaced(nb.root)}</b> إلى المستوى ${nb.lvl}`),700);} }
@@ -604,7 +608,10 @@ function seal(i,auto){
   const gone=spendCards(tiles); refundAffixes(tiles,i);
   /* Three ways a seal can come back: the copyist's first one is free, المِداد refunds a
      word that answered the round's commission, and the money-changer buys more. */
-  if(S.rowMods[i]==='mamal'&&!S.mamalUsed){ S.mamalUsed=true; floatAt(i,{good:true,text:'المَعْمَل: ختم مجّاني'}); }
+  const rhymes=has('qafiya')&&S.lastEnd&&s[0]===S.lastEnd;
+  if(rhymes) floatAt(i,{good:true,text:'القافية: مجّانًا ×٣'});
+  else if(has('jinas')&&r.root&&S.roundRoots[r.root]) floatAt(i,{good:true,text:'الجِناس: الثانية مجّانًا'});
+  else if(S.rowMods[i]==='mamal'&&!S.mamalUsed){ S.mamalUsed=true; floatAt(i,{good:true,text:'المَعْمَل: ختم مجّاني'}); }
   else if(S.freeSeal){ S.freeSeal=false; floatAt(i,{good:true,text:'ختم الوَرّاق: مجّانًا'}); }
   else if(has('midad')&&r.pat===S.wazn){ floatAt(i,{good:true,text:'المِداد: رُدَّ الختم'}); }
   else S.seals--;
@@ -709,7 +716,7 @@ function genOffers(){
      القالَب will only seal the round's وزن and pays ×5 for it. */
   if(rpool.length){
     const breakers=rpool.filter(r=>RELICS[r].rare), plain=rpool.filter(r=>!RELICS[r].rare);
-    const wantRare=S.round>=2&&breakers.length&&Math.random()<.45;
+    const wantRare=S.round>=2&&breakers.length&&Math.random()<.7;   // كاسرات are the point, not a garnish
     const id=wantRare?breakers[0]:(plain[0]||rpool[0]);
     o.push({k:'relic',id,cost:RELICS[id].rare?10:6,path:RELICS[id].path,rare:!!RELICS[id].rare});
   }
