@@ -69,14 +69,24 @@ for (let run = 0; run < RUNS; run++) {
     if (seals <= 0) { await page.waitForTimeout(500); continue; }
 
     try {
-      /* Two piles now, and choosing between them is the turn's first decision: take an أصل
-         while the root is unfinished, take a زيادة once it is closed and only زوائد can
-         lengthen the word. */
+      /* Two piles, so the turn's first decision is which one. Preference: take an أصل while a
+         root is unfinished, a زيادة once one is closed and only زوائد can lengthen the word.
+         But preference is not legality — an affix whose seat is taken in every row cannot be
+         placed at all, and insisting on it burns the round down. So check the preferred pile,
+         and fall back to the other whenever the preferred card has nowhere to go. */
+      const rowsFor = async () => page.locator('.line').evaluateAll(ns => ns.map(n => n.className));
+      const placeable = cls => cls.some(c =>
+        !c.includes('h-full') && !c.includes('h-seat') && !c.includes('locked'));
       const caps = await page.locator('.line .cap').evaluateAll(ns => ns.map(n => n.textContent || ''));
       const rootClosed = caps.some(c => { const m = c.match(/(\d+)\s*\/\s*(\d+)/); return m && +m[1] >= +m[2]; });
-      const want = rootClosed ? 'a' : 'r';
-      const selBtn = page.locator(`[data-sel="${want}"]:not([disabled])`);
-      if (await selBtn.count()) { await selBtn.click({ timeout: 1500 }).catch(() => {}); await page.waitForTimeout(35); }
+      for (const want of rootClosed ? ['a', 'r'] : ['r', 'a']) {
+        const selBtn = page.locator(`[data-sel="${want}"]:not([disabled])`);
+        if (!(await selBtn.count())) continue;
+        await selBtn.click({ timeout: 1500 }).catch(() => {});
+        await page.waitForTimeout(35);
+        const cls = await rowsFor();
+        if (placeable(cls) || cls.some(c => c.includes('h-word'))) break;   // this card has somewhere to go
+      }
 
       const sealBtn = page.locator('[data-seal]').first();
       if (await sealBtn.count()) {
