@@ -661,12 +661,16 @@ function render(){
   app.innerHTML=h; fx={line:null,kind:null};
   renderOverlay();
 }
-/* Answers "why this letter?" from what the language and the run already know:
-   a زائدة widens which أوزان you can reach, a radical deepens the roots you keep spelling. */
-
+/* The bag holds two card kinds, so it cannot be sorted as one list: an affix card has no
+   `.ch` at all, and sorting on it crashed the bag screen the moment you owned one — which is
+   from round one. Radicals group by their root, affixes follow in seat order. */
 function bagGrid(clickable){
-  const tiles=[...S.bag].sort((a,b)=>a.ch.localeCompare(b.ch,'ar'));
-  return `<div class="baggrid">${tiles.map(t=>clickable?`<button data-pick="${t.id}">${tileHTML(t)}</button>`:tileHTML(t)).join('')}</div>`;
+  const rad=S.bag.filter(isRad).sort((a,b)=>
+    S.roots.indexOf(a.root)-S.roots.indexOf(b.root) || (a.ch||'').localeCompare(b.ch||'','ar'));
+  const aff=S.bag.filter(c=>c.k==='a').sort((a,b)=>afOf(a).s-afOf(b).s);
+  const cell=c=>clickable?`<button data-pick="${c.id}">${tileHTML(c)}</button>`:tileHTML(c);
+  return `<div class="baggrid">${rad.map(cell).join('')}</div>`
+    +(aff.length?`<div class="baggrid affrow">${aff.map(cell).join('')}</div>`:'');
 }
 function renderOverlay(){
   let o='';
