@@ -21,7 +21,7 @@ const sealsFor=()=>chr().seals+(has('ghirbal')?0:0);
    The word is assembled seat by seat: A0 + R0 + A1 + R1 + A2 + R2 + A3. */
 const RADMAX=()=>has('rihab')?4:3;
 const isRad=c=>c&&c.k==='r';
-const afOf=c=>AFFIX[c.a];
+const afOf=c=>(c&&AFFIX[c.a])||{t:'',s:0,v:0,m:0,n:'',d:''};
 const cardTxt=c=>!c?'':(c.k==='r'?c.ch:afOf(c).t);
 const cardVal=c=>{ if(!c) return 0; let v=c.k==='r'?(VAL[c.ch]||1):afOf(c).v;
   if(c.ench==='gold') v*=3; if(c.ench==='seed'&&c.k==='r') v*=2; return v; };
@@ -33,7 +33,7 @@ const seatOf=(c,want)=>has('mulhaq')&&want!=null?want:afOf(c).s;
    because the liveness test only ever looked at the radicals. Four seats, one each: the row
    becomes a template you watch filling, and every زيادة is a real choice of where it goes. */
 const seatsUsed=L=>new Set(L.filter(c=>c.k==='a').map(c=>seatOf(c,c.seat)));
-const seatFree=(L,c,want)=>!seatsUsed(L).has(seatOf(c,want));
+const seatFree=(L,c,want)=>!!c&&!seatsUsed(L).has(seatOf(c,want));
 /* Assemble the row into a word. Affixes keep insertion order inside a seat. */
 function asmLine(L,extra,extraSeat){
   const rad=L.filter(isRad), aff=L.filter(c=>c.k==='a').map(c=>({c,s:seatOf(c,c.seat)}));
@@ -306,6 +306,7 @@ function canAct(){
 function drop(i,atStart){
   if(S.phase!=='play'||i>=nLines()) return;
   if(S.aim&&aimTool(i)) return;
+  if(!S.cur){ endOfDrops(); return; }   // pile dry: there is nothing to place, so close the round
   if(S.lock[i]>0){ toast('هذا السطر جافّ الآن'); return; }
   const card=S.cur;
   /* The root closes; the word does not. A full root refuses another أصل but still takes زوائد —
@@ -577,7 +578,10 @@ function tileHTML(c,cls=''){
 const HINTLAB={word:'كلمة تامّة',alive:'الجذر حيّ',dead:'لا جذر بعدها',full:'اكتمل الجذر',seat:'المقعد مشغول',junk:'حشو',locked:'جافّ',bounce:'سيرتد',jump:'سيقفز'};
 function render(){
   if(!S) return;
-  if(S.phase==='play'&&S.cur&&!canAct()){ endOfDrops(); return; }
+  /* No card in hand means the pile is dry; no legal move means the board refuses what is in
+     hand. Either way the round is over — guarding this on S.cur alone let a dry pile sit
+     forever, because with nothing in hand the check was skipped rather than triggered. */
+  if(S.phase==='play'&&(!S.cur||!canAct())){ endOfDrops(); return; }
   if(!S.bag){ app.innerHTML=''; renderOverlay(); return; }
   const n=nLines();
   const hideNext=has('rabi')||(S.boss&&S.boss.id==='blind');
