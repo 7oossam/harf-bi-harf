@@ -93,6 +93,23 @@ test only ever looks at the radicals. Arabic hangs one زيادة per seat anywa
 (`seatsUsed`/`seatFree`), and turns every affix into a real choice of *where*, not just
 whether. A row therefore tops out at three radicals + four affixes.
 
+**Two piles, and the player chooses which to draw from.** أصول and زوائد are drawn from
+separate piles (`freshPiles`, `S.radDraw`/`S.affDraw`), both face up, one selected
+(`S.sel`, `syncHand`). This fixed a real flaw and replaced it with a decision. The flaw: with
+one shuffled pile, every زيادة bought thinned the أصول needed to close a root, so buying cards
+past four seats made you *weaker* — measured, التاجر and الشاعر both died before the first shop.
+What replaces it is better than neutral: every turn you choose between advancing the root and
+lengthening the word, with the randomness living inside each pile. `S.cur` stays synced to the
+selected card so drop/stateOf/scoring never need to know about piles.
+
+**Stacking has to jump, not step** (`STACK` in `scoreWord`). Measured with a flat per-affix
+multiplier, sealing a bare root scored as well as holding out for زوائد — **2/6 runs reached
+round 6 either way**, which means the gamble was not a gamble. In the old letter game the same
+experiment gave a decisive gap (99 avg / 0-6 wins vs 410 / 5-6). A زيادة is a bet: it spends a
+card, lengthens the word, and 29% of two-affix stacks are not words at all. So the second
+affix doubles, the third is ×3.5, the fourth ×6. If that gap ever closes again, the gamble is
+broken again — it is the single most important number in the game.
+
 **The bag is four roots you can name.** Twelve radical cards, not an alphabet — you know what
 is in there. All four start in your notebook, which is what keeps them yours: twelve radicals
 throw up plenty of *accidental* roots (خ+ت+م from three different roots is real), and that is
@@ -101,9 +118,9 @@ would be decoration.
 
 **Known gaps — the next work:**
 - `TARGETS` were measured for the *letter* game and are certainly wrong for the card game.
-- Affixes are ~20-25% of the pile at run start; whether that is the right ratio is unmeasured.
-- An affix whose seat is taken in every row is unplayable — burn, المِفَكّ, or a seal clears
-  it. Whether that friction is interesting or just annoying needs play, not a bot.
+- `STACK` (1/1/2/3.5/6) is a first pass; the MINLEN=3 vs MINLEN=5 gap is how to check it.
+- An affix whose seat is taken in every row is still unplayable — but now it costs you nothing
+  to leave it on its pile and draw أصول instead, which is most of why the split works.
 
 ## Conventions
 

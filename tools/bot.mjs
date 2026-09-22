@@ -66,6 +66,15 @@ for (let run = 0; run < RUNS; run++) {
     if (seals <= 0) { await page.waitForTimeout(500); continue; }
 
     try {
+      /* Two piles now, and choosing between them is the turn's first decision: take an أصل
+         while the root is unfinished, take a زيادة once it is closed and only زوائد can
+         lengthen the word. */
+      const caps = await page.locator('.line .cap').evaluateAll(ns => ns.map(n => n.textContent || ''));
+      const rootClosed = caps.some(c => { const m = c.match(/(\d+)\s*\/\s*(\d+)/); return m && +m[1] >= +m[2]; });
+      const want = rootClosed ? 'a' : 'r';
+      const selBtn = page.locator(`[data-sel="${want}"]:not([disabled])`);
+      if (await selBtn.count()) { await selBtn.click({ timeout: 1500 }).catch(() => {}); await page.waitForTimeout(35); }
+
       const sealBtn = page.locator('[data-seal]').first();
       if (await sealBtn.count()) {
         const row = await sealBtn.getAttribute('data-seal');

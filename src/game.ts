@@ -65,18 +65,26 @@ function radAlive(L){
 }
 
 /* The round's pile: every card COPIES times, shuffled, and it never refills. This is the rack. */
-const freshPile=()=>{
+/* TWO piles, and you choose which one to draw from. This is the fix for a real flaw: with
+   one shuffled pile, every زيادة you bought thinned the أصول you need to close a root, so
+   buying more cards made you weaker past four seats. Split them and the thinning is gone —
+   and what replaces it is better than neutral, it is a decision. Every turn you pick between
+   "advance the root" and "lengthen the word", with the randomness living inside each pile. */
+const freshPiles=()=>{
   const n=COPIES+(has('khabiya')?1:0);
   const affMul=(isChar('shair')?2:1)*(has('zaida')?2:1);
   const barren=S.boss&&S.boss.id==='barren';
-  const ids=[];
+  const rad=[], aff=[];
   for(const c of S.bag){
-    if(c.k==='a'&&barren) continue;                       // القحط: roots only this round
-    const reps=n*(c.k==='a'?affMul:1);
-    for(let i=0;i<reps;i++) ids.push(c.id);
+    if(c.k==='a'){
+      if(barren) continue;                                // القحط: roots only this round
+      for(let i=0;i<n*affMul;i++) aff.push(c.id);
+    } else for(let i=0;i<n;i++) rad.push(c.id);
   }
-  return shuffle(ids);
+  return {rad:shuffle(rad),aff:shuffle(aff)};
 };
+const pileOf=k=>k==='a'?S.affDraw:S.radDraw;
+const pileLeft=()=>S.radDraw.length+S.affDraw.length+S.top.length;
 /* Sealing strikes the word's own cards out of what is still to fall — Scrabble's "leave".
    A longer word scores more and costs you more of your own round.
    التَّضعيف spares the first affix in a row, so an affix build is not self-consuming. */
@@ -89,8 +97,8 @@ function spendCards(tiles){
     if(t.ench==='free') continue;
     if(!spared&&t.k==='a'){ spared=true; continue; }
     budget--;
-    const k=S.draw.findIndex(id=>id===t.id);
-    if(k>=0){ S.draw.splice(k,1); gone++; }
+    const pile=pileOf(t.k); const k=pile.findIndex(id=>id===t.id);
+    if(k>=0){ pile.splice(k,1); gone++; }
   }
   return gone;
 }
@@ -148,29 +156,47 @@ function startRound(){
   Object.assign(S,{target:TARGETS[r-1],score:0,drops:S.dropsMax,burns:S.burnsMax,
     lines:[[],[],[],[]],junk:[false,false,false,false],lock:[0,0,0,0],fixed:[0,0,0,0],chain:0,sealedSinceDrop:true,
     rootCounts:{},roundRoots:{},lastEnd:null,ash:0,dropCount:0,log:[],top:[],held:null,freeSeal:isChar('warraq'),
-    draw:[],seals:sealsFor(),boss:null,wazn:pick(PATTERNS.filter(p=>p.id!=='thulathi')).id,phase:'intro',shop:null,picker:null,nbOffer:null});
+    radDraw:[],affDraw:[],sel:'r',curR:null,curA:null,nextR:null,nextA:null,seals:sealsFor(),boss:null,wazn:pick(PATTERNS.filter(p=>p.id!=='thulathi')).id,phase:'intro',shop:null,picker:null,nbOffer:null});
   if(BOSS_ROUNDS.includes(r)){
     const pool=r===3?['blind','termite','dry']:r===6?['rhyme','barren','rush']:Object.keys(BOSSES);
     S.boss={id:pick(pool)};
   }
-  S.draw=freshPile(); S.drops=S.draw.length;   // after the boss: القحط changes what the pile holds
+  const piles=freshPiles(); S.radDraw=piles.rad; S.affDraw=piles.aff;
+  S.drops=pileLeft();
   S.charges={}; for(const k of Object.keys(S.tools)) S.charges[k]=TOOLS[k].ch;   // tools recharge every round
   S.burns=BURNS+(has('ghirbal')?2:0); S.burnsMax=S.burns;
   /* القُرْعة: open on your best letter instead of whatever the shuffle gave you. */
-  if(has('qura')&&S.draw.length){
+  if(has('qura')&&S.radDraw.length){
     let bi=-1,bv=-1;
-    for(let k=0;k<S.draw.length;k++){const c=S.bag.find(b=>b.id===S.draw[k]); const v=c?cardVal(c):0; if(v>bv){bv=v;bi=k;}}
-    if(bi>=0){ S.top.push({...S.bag.find(b=>b.id===S.draw[bi])}); S.draw.splice(bi,1); }
+    for(let k=0;k<S.radDraw.length;k++){const c=S.bag.find(b=>b.id===S.radDraw[k]); const v=c?cardVal(c):0; if(v>bv){bv=v;bi=k;}}
+    if(bi>=0){ S.top.push({...S.bag.find(b=>b.id===S.radDraw[bi])}); S.radDraw.splice(bi,1); }
   }
-  S.cur=drawTile(); S.next=drawTile();
+  S.curR=drawFrom('r'); S.nextR=drawFrom('r');
+  S.curA=drawFrom('a'); S.nextA=drawFrom('a');
+  S.sel=S.curR?'r':'a'; syncHand();
 }
-function drawTile(){
-  if(S.top.length) return S.top.shift();
-  while(S.draw.length){
-    const id=S.draw.pop(); const t=S.bag.find(b=>b.id===id);
-    if(t) return {...t};
+function drawFrom(kind){
+  if(kind==='r'&&S.top.length) return S.top.shift();
+  const pile=pileOf(kind==='a'?'a':'r');
+  while(pile.length){
+    const id=pile.pop(); const c=S.bag.find(b=>b.id===id);
+    if(c) return {...c};
   }
   return null;
+}
+/* The card actually in play is whichever pile you have selected. Keeping S.cur in sync means
+   drop/stateOf/scoring all keep working on "the card in hand" without knowing about piles. */
+function syncHand(){
+  if(S.sel==='a'&&!S.curA) S.sel='r';
+  if(S.sel==='r'&&!S.curR&&S.curA) S.sel='a';
+  S.cur=S.sel==='a'?S.curA:S.curR;
+  S.next=S.sel==='a'?S.nextA:S.nextR;
+}
+function selectPile(k){
+  if(S.phase!=='play') return;
+  if(k==='a'&&!S.curA){ toast('كومة الزوائد فارغة'); return; }
+  if(k==='r'&&!S.curR){ toast('كومة الأصول فارغة'); return; }
+  S.sel=k; syncHand(); render();
 }
 const lineStr=i=>asmLine(S.lines[i]);
 const wordOK=w=>isWord(w);
@@ -189,7 +215,7 @@ const waznOf=id=>PATTERNS.find(p=>p.id===id)||PATTERNS[0];
 function waznHint(i){
   if(!S.wazn||S.junk[i]||S.lock[i]>0||!S.lines[i].length) return null;
   const seen=new Set();
-  for(const id of S.draw){
+  for(const id of [...S.radDraw,...S.affDraw]){
     const c=S.bag.find(b=>b.id===id);
     if(!c||seen.has(c.id)) continue;
     const key=c.k==='r'?'r'+c.ch:'a'+c.a;
@@ -264,6 +290,13 @@ function scoreWord(tiles,s,row){
     let am=0; for(const c of aff) am+=afOf(c).m+(has('mushtaqq')?1:0)+(mod==='ziyada'?2:0);
     mult+=am; tags.push(`${naff} زيادة +${fmt(am)}`);
   }
+  /* الصَّرْف — stacking has to JUMP, not step. Measured with a flat per-affix multiplier,
+     sealing a bare root scored as well as holding out for زوائد (2/6 runs reached round 6
+     either way), which means the gamble was not a gamble. The whole point of a زيادة is that
+     it is a bet: it lengthens the word, spends a card, and 29% of two-affix stacks are not
+     words at all. So the second affix doubles, the third triples, the fourth is a run-maker. */
+  const STACK=[1,1,2,3.5,6];
+  if(naff>=2){ const b=STACK[Math.min(naff,4)]; x*=b; tags.push(`صَرْف ${naff} زوائد ×${fmt(b)}`); }
   if(has('sarfi')&&naff>=3){ x*=3; tags.push('الصَّرْفي ×٣'); }
 
   const p=patOf(s);
@@ -339,11 +372,11 @@ function drop(i,atStart){
       floatAt(i,{bad:true,text:'صار حشوًا'+rowLost(i,0)}); }
     else crack(i);
   }
-  S.drops=Math.max(0,S.draw.length+(S.next?1:0)+(S.cur?1:0)-1); S.dropCount++;
+  S.drops=Math.max(0,pileLeft()+(S.curR?1:0)+(S.curA?1:0)-1); S.dropCount++;
   for(let k=0;k<4;k++) if(S.lock[k]>0) S.lock[k]--;
   if(S.boss&&S.boss.id==='termite'&&S.dropCount%6===0) termite();
   advance(card);
-  if(!S.cur||S.seals<=0) endOfDrops(); else render();
+  if((!S.curR&&!S.curA)||S.seals<=0) endOfDrops(); else render();
 }
 function termite(){
   let best=-1,bl=0; for(let k=0;k<nLines();k++){ if(!S.junk[k]&&S.lines[k].length>bl){bl=S.lines[k].length;best=k;} }
@@ -367,11 +400,14 @@ function crack(i){
   floatAt(i,{bad:true,text:'انكسر السطر'+rowLost(i,scrap)});
 }
 function advance(prev){
-  if(prev&&prev.ench==='echo') S.cur={...prev,id:null,ench:null};
-  else { S.cur=S.next; S.next=drawTile(); }
+  const k=prev&&prev.k==='a'?'a':'r';
+  if(prev&&prev.ench==='echo'){                                  // صَدى: the same card again
+    if(k==='a') S.curA={...prev,id:null,ench:null}; else S.curR={...prev,id:null,ench:null};
+  } else if(k==='a'){ S.curA=S.nextA; S.nextA=drawFrom('a'); }
+  else { S.curR=S.nextR; S.nextR=drawFrom('r'); }
   /* الكَفّ: whatever you set aside comes back rather than being lost with the round */
-  if(!S.cur&&S.held){ S.cur=S.held; S.held=null; }
-  resetTimer();
+  if(!S.curR&&!S.curA&&S.held){ if(S.held.k==='a') S.curA=S.held; else S.curR=S.held; S.held=null; }
+  syncHand(); resetTimer();
 }
 function burn(){
   if(S.phase!=='play'||S.burns<=0) return;
@@ -402,7 +438,13 @@ function useTool(id){
   }
   else if(use==='hamza'){ if(S.cur.ch==='ء'){ toast('هو همزة بالفعل'); return; } S.cur={...S.cur,ch:'ء'}; }
   else if(use==='vowel'){ if(!isRad(S.cur)){toast('المدّة للأصول فقط');return;} const V=['ا','و','ي']; const i=V.indexOf(S.cur.ch); S.cur={...S.cur,ch:V[(i+1)%3]}; }
-  else if(use==='redraw'){ const t=drawTile(); if(!t){ toast('الكومة فارغة'); return; } S.draw.unshift(S.cur.id); S.cur=t; }
+  else if(use==='redraw'){
+    const k=S.cur.k==='a'?'a':'r', t=drawFrom(k);
+    if(!t){ toast('هذه الكومة فارغة'); return; }
+    pileOf(k).unshift(S.cur.id);
+    if(k==='a') S.curA=t; else S.curR=t;
+    syncHand();
+  }
   else if(use==='hold'){
     if(S.held){ const h=S.held; S.held=S.cur; S.cur=h; }
     else { S.held=S.cur; advance(null); }
@@ -423,7 +465,7 @@ function aimTool(i){
     const k=[...L].reverse().findIndex(c=>c.k==='a');
     if(k<0){ toast('لا زيادة في هذا السطر'); return true; }
     const at=L.length-1-k; const c=L[at];
-    S.lines[i]=[...L.slice(0,at),...L.slice(at+1)]; S.draw.push(c.id);
+    S.lines[i]=[...L.slice(0,at),...L.slice(at+1)]; pileOf('a').push(c.id);
   }
   else if(use==='wipe'){ if(!L.length){ toast('السطر فارغ'); return true; } S.lines[i]=[]; S.junk[i]=false; }
   S.charges[id]--; S.aim=null; audio('seal',0); render(); return true;
@@ -462,7 +504,7 @@ function seal(i,auto){
   else S.seals--;
   S.ash=0;
   if(has('misann')) for(const k of Object.keys(S.tools)) S.charges[k]=Math.min(TOOLS[k].ch,(S.charges[k]||0)+1);
-  S.drops=S.draw.length+(S.next?1:0)+(S.cur?1:0);
+  S.drops=pileLeft()+(S.curR?1:0)+(S.curA?1:0);
   if(gone) floatAt(i,{bad:true,text:`أُنفق ${gone} من حروف الجولة`});
   S.lines[i]=[]; fx={line:i,kind:'sealed'};
   if(S.rowMods[i]==='echo') S.lines[i]=[{id:null,ch:s[s.length-1],ench:null}];
@@ -594,7 +636,7 @@ function render(){
   /* No card in hand means the pile is dry; no legal move means the board refuses what is in
      hand. Either way the round is over — guarding this on S.cur alone let a dry pile sit
      forever, because with nothing in hand the check was skipped rather than triggered. */
-  if(S.phase==='play'&&(!S.cur||!canAct())){ endOfDrops(); return; }
+  if(S.phase==='play'&&((!S.curR&&!S.curA)||!canAct())){ endOfDrops(); return; }
   if(!S.bag){ app.innerHTML=''; renderOverlay(); return; }
   const n=nLines();
   const hideNext=has('rabi')||(S.boss&&S.boss.id==='blind');
@@ -604,7 +646,7 @@ function render(){
   let h=`<div class="head">
     <span class="rnd">جولة <b>${S.round}</b> من <b>${TARGETS.length}</b>${S.boss?` <span class="boss">${BOSSES[S.boss.id].n}</span>`:''}</span>
     <span class="tally"><b class="now">${S.score}</b><span class="track"><i style="width:${pct}%"></i></span><span class="goal">${S.target}</span></span>
-    <span class="purse"><b class="seals">${S.seals}</b> ختم &nbsp; ${S.draw.length+S.top.length} حرفًا &nbsp; <b>${S.gold}</b> د</span>
+    <span class="purse"><b class="seals">${S.seals}</b> ختم &nbsp; ${pileLeft()} بطاقة &nbsp; <b>${S.gold}</b> د</span>
   </div>
   <div class="commission">طلب هذه الجولة <b>${waznOf(S.wazn).n}</b><span>يدفع ضعفين</span></div>
   <div class="lines">`;
@@ -635,15 +677,26 @@ function render(){
         return h;})()}</div></div>
       ${sealBtn}</div>`;
   }
-  const pileN=S.draw.length+S.top.length;
   h+=`</div>
-  <div class="hand">
+  <div class="hand two">
     <button class="burn" data-act="burn" ${S.burns<=0||S.phase!=='play'?'disabled':''}>احرق<small>${S.burns} متبقية</small></button>
-    <div class="cur">${tileHTML(S.cur,'big')}
-      <div class="enchlab">${S.cur&&S.cur.k==='a'?`<b>${afOf(S.cur).n}</b> · ${SEATS[afOf(S.cur).s]}`:`<span class="pile">في الكومة ${pileN}</span>`}</div>
+    <div class="piles">
+      <button class="pilecard ${S.sel==='r'?'on':''}" data-sel="r" ${S.curR?'':'disabled'}>
+        ${tileHTML(S.curR,'big')}
+        <span class="plabel">أصول · ${S.radDraw.length+S.top.length}</span>
+        ${hideNext?'':`<span class="pnext">${tileHTML(S.nextR,'small')}</span>`}
+      </button>
+      <button class="pilecard ${S.sel==='a'?'on':''}" data-sel="a" ${S.curA?'':'disabled'}>
+        ${tileHTML(S.curA,'big')}
+        <span class="plabel">زوائد · ${S.affDraw.length}</span>
+        ${hideNext?'':`<span class="pnext">${tileHTML(S.nextA,'small')}</span>`}
+      </button>
+    </div>
+    <div class="handnote">
+      ${S.cur&&S.cur.k==='a'?`<b>${afOf(S.cur).n}</b> · ${SEATS[afOf(S.cur).s]}`:S.cur?`أصل — يُكمل الجذر`:'—'}
       ${S.boss&&S.boss.id==='rush'?'<div class="timer"><i style="width:100%"></i></div>':''}
-      ${S.held?`<button class="heldbtn" data-tool="kaff">في الكَفّ: ${cardTxt(S.held)}</button>`:''}</div>
-    <button class="nextwrap" data-act="twin" ${has('tawam')&&!hideNext?'':'tabindex="-1"'}>${has('tawam')&&!hideNext?'التالي · بدّل':'التالي'}${hideNext?tileHTML(null,'small'):tileHTML(S.next,'small')}</button>
+      ${S.held?`<button class="heldbtn" data-tool="kaff">في الكَفّ: ${cardTxt(S.held)}</button>`:''}
+    </div>
   </div>
   ${Object.keys(S.tools).length?`<div class="tools">${Object.keys(S.tools).map(t=>{
     const c=S.charges[t]||0, armed=S.aim===t;
@@ -809,7 +862,7 @@ function audio(kind,lvl=0){
 
 let prevPhase='play';
 document.addEventListener('click',e=>{
-  const b=e.target.closest('[data-seal],[data-act],[data-buy],[data-pick],[data-relic],[data-mod],[data-start],[data-line],[data-starter],[data-write],[data-replace],[data-row],[data-path],[data-tool],[data-char],[data-combo]');
+  const b=e.target.closest('[data-seal],[data-act],[data-buy],[data-pick],[data-relic],[data-mod],[data-start],[data-line],[data-starter],[data-write],[data-replace],[data-row],[data-path],[data-tool],[data-char],[data-combo],[data-sel]');
   if(!b||!S) return;
   const D=b.dataset;
   if(D.seal!=null) return seal(+D.seal);
@@ -821,6 +874,7 @@ document.addEventListener('click',e=>{
   if(D.write) return writeRoot(D.write);
   if(D.replace!=null) return replaceRoot(+D.replace);
   if(D.relic){ const r=RELICS[D.relic]; return toast(`<b>${r.n}</b> — ${r.d}`); }
+  if(D.sel) return selectPile(D.sel);
   if(D.tool) return useTool(D.tool);
   if(D.combo){ const c=COMBOS.find(x=>x.n===D.combo); return toast(`<b>⁂ ${c.n}</b> — ${c.d}`); }
   if(D.char){ const c=CHARS.find(x=>x.id===D.char); return toast(`<b>${c.n}</b> — ${c.d}`); }
