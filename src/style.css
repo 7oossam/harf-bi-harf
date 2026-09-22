@@ -344,3 +344,6 @@ button:focus-visible,.line:focus-visible{outline:2px solid var(--ink);outline-of
 .offer.rare{border-color:var(--seal);box-shadow:inset 0 0 0 1px var(--seal)}
 .offer.rare .kind{color:var(--seal);font-weight:700;letter-spacing:.3px}
 .offer.k-root .nm{font-family:var(--naskh);font-size:20px;letter-spacing:2px}
+/* زوائد are spent for good now, so the stock has to be visible and its last cards loud */
+.pilecard .plabel.low{color:var(--rubric);font-weight:700}
+.seal .cost.burn{color:var(--rubric);font-weight:600}

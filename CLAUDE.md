@@ -102,6 +102,34 @@ What replaces it is better than neutral: every turn you choose between advancing
 lengthening the word, with the randomness living inside each pile. `S.cur` stays synced to the
 selected card so drop/stateOf/scoring never need to know about piles.
 
+**زوائد are ammunition, not upgrades.** Hussam, after playing: "affix cards, once bought, are
+unlimited — I expect that is wrong." So أصول and زوائد are now economically different things,
+which is also what they are linguistically:
+
+- **أصول are a rack.** Every radical card falls `COPIES` times and the pile refills each round.
+  A root is a permanent part of who you are.
+- **زوائد are a magazine.** The affix pile is literally the cards you own, one entry each, and
+  sealing a word SPENDS its زوائد out of the bag for good (`consumeAffixes`). A purchase is
+  three cards, not one, because it has to be worth several words.
+
+A permanent affix is an upgrade you buy once and forget. A spent one asks the seal-budget
+question every single time: *is THIS word worth my «ال»?* Gold had to become a supply line to
+match (base 6, over-target up to 12) — you re-stock every round or the engine stalls.
+التَّضعيف (first زيادة per word returns) and طَليق (that card never spends) are what they are
+worth owning for now.
+
+**The commission is only ever something you can build** (`reachableWazns`). Hussam again:
+"whether I can hit the wazn depends on which زوائد I happen to own — so am I buying an affix
+for the score, or on the CHANCE it fits a required وزن?" A commission you cannot build is not
+a goal, it is a lottery ticket. The round now draws its wazn from the patterns your cards can
+actually assemble: round one, with no زوائد, commissions ثلاثي — the bare root, exactly what
+you can do — and every زيادة you buy widens that pool. That is the answer to his question:
+**you buy the affix to open the أوزان.**
+
+**A root in the notebook brings its cards.** `adoptRoot` — writing, replacing or buying a root
+puts its three أصول in the bag, and a replaced root takes its cards out again. A notebook root
+whose cards you cannot draw is a bonus on a word you will never spell again.
+
 **A run opens with NO زوائد, and "beat the target" is not the measure.** Hussam's correction,
 and it invalidated part of the measurement below: beating round one with a two-affix word is
 not evidence of anything, because in round one the player is not supposed to own زوائد at all.

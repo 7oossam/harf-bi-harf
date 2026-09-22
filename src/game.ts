@@ -70,16 +70,19 @@ function radAlive(L){
    buying more cards made you weaker past four seats. Split them and the thinning is gone —
    and what replaces it is better than neutral, it is a decision. Every turn you pick between
    "advance the root" and "lengthen the word", with the randomness living inside each pile. */
+/* أصول are a rack — every radical card falls COPIES times and the pile refills each round,
+   because the root is a permanent part of who you are. زوائد are AMMUNITION: the affix pile
+   is literally the cards you own, one entry each, and sealing a word SPENDS the زيادة out of
+   your bag for good. Hussam: "affix cards, once bought, are unlimited — I expect that is
+   wrong", and he is right; a permanent affix is an upgrade you buy once and forget, while a
+   spent one asks the seal-budget question every time: is THIS word worth my «ال»? */
 const freshPiles=()=>{
   const n=COPIES+(has('khabiya')?1:0);
-  const affMul=(isChar('shair')?2:1)*(has('zaida')?2:1);
   const barren=S.boss&&S.boss.id==='barren';
   const rad=[], aff=[];
   for(const c of S.bag){
-    if(c.k==='a'){
-      if(barren) continue;                                // القحط: roots only this round
-      for(let i=0;i<n*affMul;i++) aff.push(c.id);
-    } else for(let i=0;i<n;i++) rad.push(c.id);
+    if(c.k==='a'){ if(!barren) aff.push(c.id); }          // القحط: no زوائد fall this round
+    else for(let i=0;i<n;i++) rad.push(c.id);
   }
   return {rad:shuffle(rad),aff:shuffle(aff)};
 };
@@ -88,14 +91,25 @@ const pileLeft=()=>S.radDraw.length+S.affDraw.length+S.top.length;
 /* Sealing strikes the word's own cards out of what is still to fall — Scrabble's "leave".
    A longer word scores more and costs you more of your own round.
    التَّضعيف spares the first affix in a row, so an affix build is not self-consuming. */
+/* Radicals are struck from the ROUND's pile (Scrabble's leave). Affixes are struck from the
+   BAG — they do not come back next round, or ever. التَّضعيف spares the first one in a row and
+   طَليق spares its card entirely, which is what makes both worth owning now. */
+function consumeAffixes(tiles){
+  let spared=!has('tadeef');
+  for(const c of tiles){
+    if(c.k!=='a'||!c.id) continue;
+    if(c.ench==='free') continue;
+    if(!spared){ spared=true; continue; }
+    S.bag=S.bag.filter(b=>b.id!==c.id);
+  }
+}
 function spendCards(tiles){
   let gone=0;
   /* المِقَصّ pays half the leave; a طَليق letter is never struck at all. */
-  let budget=has('miqass')?Math.ceil(tiles.length/2):tiles.length, spared=!has('tadeef');
+  let budget=has('miqass')?Math.ceil(tiles.length/2):tiles.length;
   for(const t of tiles){
     if(budget<=0) break;
     if(t.ench==='free') continue;
-    if(!spared&&t.k==='a'){ spared=true; continue; }
     budget--;
     const pile=pileOf(t.k); const k=pile.findIndex(id=>id===t.id);
     if(k>=0){ pile.splice(k,1); gone++; }
@@ -526,7 +540,7 @@ function seal(i,auto){
   if(S.rowMods[i]==='gold') S.gold+=3;
   if(isChar('tajir')&&r.naff){ S.gold+=r.naff; floatAt(i,{good:true,text:`التاجر +${r.naff} دينار`}); }
   tiles.filter(t=>t.ench==='glass'&&t.id).forEach(t=>{S.bag=S.bag.filter(b=>b.id!==t.id);});
-  const gone=spendCards(tiles);
+  const gone=spendCards(tiles); consumeAffixes(tiles);
   /* Three ways a seal can come back: the copyist's first one is free, المِداد refunds a
      word that answered the round's commission, and the money-changer buys more. */
   if(S.freeSeal){ S.freeSeal=false; floatAt(i,{good:true,text:'ختم الوَرّاق: مجّانًا'}); }
@@ -562,7 +576,9 @@ function endOfDrops(){
 }
 function winRound(){
   const boss=!!S.boss;
-  const base=4+(boss?3:0), over=Math.max(0,Math.min(8,Math.floor((S.score/S.target-1)*8))), interest=Math.min(5,Math.floor(S.gold/5));
+  /* زوائد are consumed now, so gold is a supply line, not a savings account: the base rises
+     and beating the target pays more, because every round you must re-stock. */
+  const base=6+(boss?4:0), over=Math.max(0,Math.min(12,Math.floor((S.score/S.target-1)*10))), interest=Math.min(4,Math.floor(S.gold/6));
   S.earn={base,over,interest,total:base+over+interest};
   S.gold+=S.earn.total; audio('win');
   if(S.round>=TARGETS.length){ S.phase='victory'; render(); return; }
@@ -651,11 +667,13 @@ function buy(idx){
   else if(o.k==='patup'){ S.patLv[o.id]=(S.patLv[o.id]||1)+1; pay(o); pathFeedback('pattern'); }
   else if(o.k==='ench') S.picker={mode:'ench',ench:o.id,idx};
   else if(o.k==='affix'){
-    /* Two cards per buy, so one purchase is felt in the pile rather than diluted by COPIES. */
-    S.bag.push({id:uid++,k:'a',a:o.id,ench:null});
-    S.bag.push({id:uid++,k:'a',a:o.id,ench:null});
+    /* A purchase is a magazine, not a card: زوائد are spent on use, so one buy has to be
+       worth several words. الشاعر and الزائدة now add rounds to the magazine instead of
+       multiplying a permanent pile. */
+    const n=3+(isChar('shair')?2:0)+(has('zaida')?2:0);
+    for(let i=0;i<n;i++) S.bag.push({id:uid++,k:'a',a:o.id,ench:null});
     pay(o); pathFeedback('pattern');
-    toast(`<b>${AFFIX[o.id].n} «${AFFIX[o.id].t}»</b> — ${AFFIX[o.id].d}`);
+    toast(`<b>${AFFIX[o.id].n} «${AFFIX[o.id].t}»</b> ×${n} — ${AFFIX[o.id].d}`);
   }
   else if(o.k==='root'){ adoptRoot(o.id); if(S.notebook.length<nbSlots()) S.notebook.push({root:o.id,lvl:1,xp:0}); pay(o); pathFeedback('root'); }
   else if(o.k==='row') S.picker={mode:'row',mod:o.id,idx};
@@ -736,7 +754,8 @@ function render(){
       const bits=[]; if(r) bits.push(`<span class="${nb?'nbk':''}">${spaced(r)}${nb?' من الدفتر':''}</span>`); if(c) bits.push(`رنين <b>×${c+1}</b>`); if(p) bits.push('وزن '+p.n);
       rootl=bits.length?`<div class="rootlab">${bits.map(b=>`<span>${b}</span>`).join('')}</div>`:''; }
     let sealBtn='';
-    if(ok&&S.seals>0){const p=scoreWord(L,s,i); sealBtn=`<button class="seal" data-seal="${i}">ختم<small>+${p.score}</small><small class="cost">−${L.length} بطاقة</small></button>`;}
+    if(ok&&S.seals>0){const p=scoreWord(L,s,i); const na=L.filter(c=>c.k==='a').length-(has('tadeef')?1:0);
+      sealBtn=`<button class="seal" data-seal="${i}">ختم<small>+${p.score}</small>${na>0?`<small class="cost burn">تُنفق ${na} زيادة</small>`:`<small class="cost">−${L.length} بطاقة</small>`}</button>`;}
     else if(junk&&L.length) sealBtn=`<button class="seal junkseal" data-seal="${i}">امسح<small>+${3*s.length}</small></button>`;
     const mod=S.rowMods[i];
     const endHint=S.phase==='play'&&!junk&&S.lock[i]<=0?stateOf(i,S.cur,false):null;
@@ -766,7 +785,7 @@ function render(){
       </button>
       <button class="pilecard ${S.sel==='a'?'on':''}" data-sel="a" ${S.curA?'':'disabled'}>
         ${tileHTML(S.curA,'big')}
-        <span class="plabel">زوائد · ${S.affDraw.length}</span>
+        <span class="plabel ${S.affDraw.length<=2?'low':''}">ذخيرة الزوائد · ${S.affDraw.length}</span>
         ${hideNext?'':`<span class="pnext">${tileHTML(S.nextA,'small')}</span>`}
       </button>
     </div>
