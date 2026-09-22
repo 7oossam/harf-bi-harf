@@ -114,6 +114,31 @@ and when**, which is the only axis that makes five categories five things instea
 | `ROWMODS` | السطور | all round, one row | you, by inscribing |
 | `ENCH` | الوسوم | one letter, forever | you, by choosing the letter |
 
+**Combos are a table, not a hope** (`COMBOS` in `data.ts`). Hades names its duo boons, and
+that is most of why its builds read as builds: a synergy the player cannot see is a
+coincidence. Each entry is a named pair (or trio) worth more than its parts, with parts
+namespaced across categories — `char:` `relic:` `tool:` `row:` `mark:` — because the crossing
+is the point. Three things read this table:
+
+- `comboState()` splits them into **live** (all parts owned, shown in the margin) and **near**
+  (exactly one part missing).
+- `genOffers()` pulls anything that completes a *near* combo to the front of its pool, so a
+  build you start is a build you can finish rather than one the shuffle has to hand you. The
+  leading path is now the weaker tiebreak behind that.
+- The shop card names the combo an offer would complete ("يُكمل: الطاحونة"), and `comboCheck()`
+  toasts one the moment it closes.
+
+Adding content means adding to `COMBOS` too, or the new thing is an island. Two relics exist
+purely as bridges to categories that had none: المِسَنّ recharges tools on every seal (tools
+had zero relic support), and الرَّماد banks burned letters into the next seal (burning was
+pure loss, so الغِربال's +2 burns bought nothing).
+
+**Watch for anti-synergies** — two of the first draft's were real traps, both found by audit
+rather than play: القلم stops rows breaking so حجر الرحى never fired, though the chain path
+recommended both (fixed by paying الرحى for *any* row lost, via `rowLost()`); and القَلْب
+accepted a mirrored row but scored the unmirrored string, so `rootOf`/`patOf` ran on the
+meaningless direction and the relic paid nothing.
+
 `TOOLS` is the new one and the point of the exercise: before it, the only answer to a bad
 letter was "which row hurts least" plus the burn button. Charges reset each round, so a tool
 is a budget inside the round rather than a permanent edge. Tools that target a row (`ROW_TOOLS`)

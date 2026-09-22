@@ -1,5 +1,5 @@
 import { loadDict, norm, IDX, DISP, ROOTS, SORTED, isAlive, isWord, hasAl, displayOf, rootOf, spaced } from './dict';
-import { VAL, LETTERS, FAM, famOf, LENB, TARGETS, BOSS_ROUNDS, DROPS, BURNS, LINE_MAX, LINE_CAPS, ZAWAID, COPIES, SEALS, BAG_CAP, NB_SLOTS, STARTERS, CHARS, TOOLS, PATTERNS, patOf, RELICS, ROWMODS, BOSSES, ENCH, PATHS, pathLvl } from './data';
+import { VAL, LETTERS, FAM, famOf, LENB, TARGETS, BOSS_ROUNDS, DROPS, BURNS, LINE_MAX, LINE_CAPS, ZAWAID, COPIES, SEALS, BAG_CAP, NB_SLOTS, STARTERS, CHARS, TOOLS, COMBOS, ownedIds, PATTERNS, patOf, RELICS, ROWMODS, BOSSES, ENCH, PATHS, pathLvl } from './data';
 
 /* ================= STATE ================= */
 let S=null, uid=1;
@@ -38,6 +38,18 @@ const nbLetters=()=>{const s=new Set(); S.notebook.forEach(n=>[...n.root].forEac
 
 /* ================= PATHS (BUILDS) ================= */
 const pathLevelOf=id=>pathLvl(PATHS.find(p=>p.id===id).progress(S,has));
+/* A combo is "live" when every part is owned. `comboNear` is the shop's lever: the pairs
+   you are exactly one piece away from, and what that missing piece is. */
+function comboState(){
+  const own=ownedIds(S), live=[], near=[];
+  for(const c of COMBOS){
+    const missing=c.parts.filter(x=>!own.has(x));
+    if(!missing.length) live.push(c);
+    else if(missing.length===1) near.push({c,need:missing[0]});
+  }
+  return {live,near};
+}
+const comboWants=()=>new Set(comboState().near.map(n=>n.need));
 const pathStats=()=>PATHS.map(p=>({id:p.id,n:p.n,c:p.c,d:p.d,lvl:pathLevelOf(p.id)}));
 const leadingPath=()=>{let best=null,bl=0; for(const p of PATHS){const lv=pathLevelOf(p.id); if(lv>bl){bl=lv;best=p.id;}} return best;};
 function pathFeedback(id){
@@ -53,13 +65,14 @@ function newRun(starter){
   S={phase:'intro',round:1,gold:st.gold,bag:[...st.letters].map(ch=>({id:uid++,ch,ench:null})),relics:[],tools:{},
      charId:st.id,rowMods:[null,null,null,null],notebook:nb,patLv:{},permMult:0,seenRoots:{},seenPatterns:{},
      burnsMax:BURNS,dropsMax:DROPS,stats:{words:0,best:null,total:0,maxChain:0},mute:S?S.mute:false,starter:st.n};
+  comboSeen=new Set(); comboCheck();
   startRound();
 }
 function startRound(){
   const r=S.round;
   Object.assign(S,{target:TARGETS[r-1],score:0,drops:S.dropsMax,burns:S.burnsMax,
     lines:[[],[],[],[]],junk:[false,false,false,false],lock:[0,0,0,0],fixed:[0,0,0,0],chain:0,sealedSinceDrop:true,
-    rootCounts:{},roundRoots:{},lastEnd:null,dropCount:0,log:[],top:[],held:null,freeSeal:isChar('warraq'),
+    rootCounts:{},roundRoots:{},lastEnd:null,ash:0,dropCount:0,log:[],top:[],held:null,freeSeal:isChar('warraq'),
     draw:[],seals:sealsFor(),boss:null,wazn:pick(PATTERNS.filter(p=>p.id!=='thulathi')).id,phase:'intro',shop:null,picker:null,nbOffer:null});
   S.draw=freshPile(); S.drops=S.draw.length;
   S.charges={}; for(const k of Object.keys(S.tools)) S.charges[k]=TOOLS[k].ch;   // tools recharge every round
@@ -90,8 +103,6 @@ const lineStr=i=>S.lines[i].map(t=>t.ch).join('');
    القَلْب lets a row count if its mirror is a word, الشّاذّ lets a two-letter row count. */
 const rev=w=>[...w].reverse().join('');
 const wordOK=w=>isWord(w)||(has('qalb')&&w.length>=3&&isWord(rev(w)))||(has('shadh')&&w.length===2&&isWord(w));
-/* the form that actually scores — القَلْب scores the reading that is real */
-const readAs=w=>(isWord(w)||!has('qalb'))?w:(isWord(rev(w))?rev(w):w);
 function placed(i,tile,atStart){
   const L=S.lines[i];
   const put=ch=>atStart?[{...tile,ch},...L]:[...L,{...tile,ch}];
@@ -161,6 +172,9 @@ function waznHint(i){
 
 /* ================= SCORING ================= */
 function scoreWord(tiles,s,row){
+  /* القَلْب accepts a row whose mirror is the word — so score the reading that IS a word,
+     or rootOf/patOf run on the meaningless direction and the relic quietly pays nothing. */
+  if(has('qalb')&&!isWord(s)&&isWord(rev(s))){ s=rev(s); tiles=[...tiles].reverse(); }
   const len=s.length, tags=[]; let chips=0, x=1;
   for(let k=0;k<tiles.length;k++){
     const t=tiles[k]; let v=VAL[t.ch]||1;
@@ -171,8 +185,9 @@ function scoreWord(tiles,s,row){
     chips+=v;
   }
   /* مُثْقَل counts twice toward length, which is how a short bag still reaches a long وزن. */
-  const wlen=len+tiles.filter(t=>t.ench==='heavy').length;
+  const wlen=len+tiles.filter(t=>t.ench==='heavy').length+(has('taarif')&&!hasAl(s)?1:0);
   chips+=LENB[Math.min(wlen,8)];
+  if(S.ash){ chips+=S.ash; tags.push('رماد +'+S.ash); }
   let mult=1+Math.max(0,wlen-3);
   const p=patOf(s);
   if(p){ const lv=S.patLv[p.id]||1, com=p.id===S.wazn;
@@ -240,7 +255,8 @@ function drop(i,atStart){
     }
     else if(S.rowMods[i]==='fort'||S.lines[i].some(t=>t.ench==='anchor')){ fx={line:i,kind:'crack'}; floatAt(i,{bad:true,text:'ارتدّ الحرف'}); }
     else if(has('tufayli') && parasiteTarget(i,tile)!=null){ const j=parasiteTarget(i,tile); S.lines[j]=placed(j,tile,false); fx={line:j,kind:'drop'}; floatAt(j,{bad:true,text:'قفز الطفيلي'}); }
-    else if(has('qalam')){ S.lines[i]=[...S.lines[i],tile]; S.junk[i]=true; fx={line:i,kind:'crack'}; audio('crack'); }
+    else if(has('qalam')){ S.lines[i]=[...S.lines[i],tile]; S.junk[i]=true; fx={line:i,kind:'crack'}; audio('crack');
+      floatAt(i,{bad:true,text:'صار حشوًا'+rowLost(i,0)}); }
     else crack(i);
   }
   S.drops=Math.max(0,S.draw.length+(S.next?1:0)+(S.cur?1:0)-1); S.dropCount++;
@@ -256,13 +272,19 @@ function termite(){
   toast(`<b>الأرَضة</b> أكلت «${eaten}»`);
   if(!isAlive(lineStr(best))) crack(best);
 }
+/* A row can be lost three ways now — broken, turned to حشو by القلم، or bounced off حِصن.
+   الرحى pays for the loss itself, not for one particular spelling of it, otherwise owning
+   القلم silently switches الرحى off and the chain path recommends a pair that cancels. */
+function rowLost(i,scrap){
+  if(!has('raha')) return scrap?`، نشارة +${scrap}`:'';
+  S.permMult+=.5;
+  return '، الرحى +٠٫٥'+(scrap?` ونشارة +${scrap}`:'');
+}
 function crack(i){
   const scrap=S.lines[i].reduce((a,t)=>a+(VAL[t.ch]||1),0);
   S.score+=scrap;
   S.lines[i]=[]; S.chain=0; fx={line:i,kind:'crack'}; audio('crack');
-  const tail=scrap?`، نشارة +${scrap}`:'';
-  if(has('raha')){ S.permMult+=.5; floatAt(i,{bad:true,text:'انكسر، الرحى +٠٫٥'+tail}); }
-  else floatAt(i,{bad:true,text:'انكسر السطر'+tail});
+  floatAt(i,{bad:true,text:'انكسر السطر'+rowLost(i,scrap)});
 }
 function advance(prev){
   if(prev&&prev.ench==='echo') S.cur={...prev,id:null,ench:null};
@@ -271,7 +293,14 @@ function advance(prev){
   if(!S.cur&&S.held){ S.cur=S.held; S.held=null; }
   resetTimer();
 }
-function burn(){ if(S.phase!=='play'||S.burns<=0) return; S.burns--; audio('burn'); advance(null); render(); }
+function burn(){
+  if(S.phase!=='play'||S.burns<=0) return;
+  S.burns--;
+  /* الرَّماد — burning was pure loss, so الغِربال (+2 burns) bought you nothing to do.
+     Now what you burn is banked into the next seal, and the pair is a build. */
+  if(has('ramad')&&S.cur) S.ash=(S.ash||0)+(VAL[S.cur.ch]||1)*3;
+  audio('burn'); advance(null); render();
+}
 function twinSwap(){ if(S.phase!=='play'||!has('tawam')||has('rabi')) return; [S.cur,S.next]=[S.next,S.cur]; audio('drop'); render(); }
 
 /* ================= الأدوات — TOOLS =================
@@ -338,9 +367,11 @@ function seal(i,auto){
   const gone=spendLetters(tiles);
   /* Three ways a seal can come back: the copyist's first one is free, المِداد refunds a
      word that answered the round's commission, and the money-changer buys more. */
-  if(S.freeSeal){ S.freeSeal=false; floatAt(i,{bad:false,text:'ختم الوَرّاق: مجّانًا'}); }
-  else if(has('midad')&&r.pat===S.wazn){ floatAt(i,{bad:false,text:'المِداد: رُدَّ الختم'}); }
+  if(S.freeSeal){ S.freeSeal=false; floatAt(i,{good:true,text:'ختم الوَرّاق: مجّانًا'}); }
+  else if(has('midad')&&r.pat===S.wazn){ floatAt(i,{good:true,text:'المِداد: رُدَّ الختم'}); }
   else S.seals--;
+  S.ash=0;
+  if(has('misann')) for(const k of Object.keys(S.tools)) S.charges[k]=Math.min(TOOLS[k].ch,(S.charges[k]||0)+1);
   S.drops=S.draw.length+(S.next?1:0)+(S.cur?1:0);
   if(gone) floatAt(i,{bad:true,text:`أُنفق ${gone} من حروف الجولة`});
   S.lines[i]=[]; fx={line:i,kind:'sealed'};
@@ -387,21 +418,26 @@ function replaceRoot(idx){ S.notebook[idx]={root:S.nbReplace,lvl:1,xp:0}; S.nbRe
 function openShop(){ S.phase='shop'; S.shop={offers:genOffers(),reroll:2,removed:false,lead:leadingPath()}; render(); }
 function genOffers(){
   const lead=leadingPath();
+  /* The shop's job is to let you FINISH a build, not to hand you a fresh one every time.
+     Anything that completes a combo you are one piece away from is pulled to the front of
+     its pool; the leading path is the weaker tiebreak behind it. */
+  const wants=comboWants();
+  const front=(arr,tag)=>{const w=arr.filter(x=>wants.has(tag+':'+x)), r=arr.filter(x=>!wants.has(tag+':'+x)); shuffle(w); shuffle(r); return [...w,...r];};
   const pool=Object.keys(RELICS).filter(r=>!S.relics.includes(r));
   const matched=pool.filter(r=>RELICS[r].path===lead), other=pool.filter(r=>RELICS[r].path!==lead);
   shuffle(matched); shuffle(other);
-  const relicPool=lead?[...matched,...other]:shuffle(pool);
-  const o=relicPool.slice(0,2).map(r=>({k:'relic',id:r,cost:6,path:RELICS[r].path}));
+  const relicPool=front(lead?[...matched,...other]:shuffle(pool),'relic');
+  const o:any[]=relicPool.slice(0,2).map(r=>({k:'relic',id:r,cost:6,path:RELICS[r].path}));
   o.push({k:'letters',cost:3,opts:letterOpts()});
-  const rid=pick(Object.keys(ROWMODS));
+  const rid=front(Object.keys(ROWMODS),'row')[0];
   o.push({k:'row',id:rid,cost:4,path:ROWMODS[rid].path});
   const wantNb=lead==='root'||(lead!=='pattern'&&Math.random()<.5&&S.notebook.length);
   if(wantNb&&S.notebook.length){ o.push({k:'nbup',root:pick(S.notebook).root,cost:3,path:'root'}); }
   else o.push({k:'patup',id:pick(PATTERNS.filter(p=>p.id!=='thulathi')).id,cost:3,path:'pattern'});
-  o.push({k:'ench',id:pick(Object.keys(ENCH)),cost:4,path:'bag'});
+  o.push({k:'ench',id:front(Object.keys(ENCH),'mark')[0],cost:4,path:'bag'});
   /* a tool you do not own yet — agency is worth a slot of its own every shop */
-  const tpool=Object.keys(TOOLS).filter(t=>!S.tools[t]);
-  if(tpool.length) o.push({k:'tool',id:pick(tpool),cost:5});
+  const tpool=front(Object.keys(TOOLS).filter(t=>!S.tools[t]),'tool');
+  if(tpool.length) o.push({k:'tool',id:tpool[0],cost:5});
   return o;
 }
 function letterOpts(){
@@ -419,23 +455,32 @@ function buy(idx){
   else if(o.k==='letters'){ if(S.bag.length>=bagCap()){toast('كيسك ممتلئ');return;} S.picker={mode:'letters',idx}; }
   else if(o.k==='row') S.picker={mode:'row',mod:o.id,idx};
   else if(o.k==='tool'){ S.tools[o.id]=1; S.charges[o.id]=TOOLS[o.id].ch; pay(o); toast(`<b>${TOOLS[o.id].n}</b> — ${TOOLS[o.id].d}`); }
-  audio('drop'); render();
+  audio('drop'); comboCheck(); render();
 }
 function pay(o){S.gold-=o.cost;o.sold=true;}
+/* Announce a combo the moment it closes — Balatro's lesson is that the player has to be
+   told WHY the number moved, or the synergy may as well not exist. */
+let comboSeen=new Set();
+function comboCheck(){
+  for(const c of comboState().live) if(!comboSeen.has(c.n)){
+    comboSeen.add(c.n);
+    setTimeout(()=>toast(`<b>⁂ ${c.n}</b><br>${c.d}`),450);
+  }
+}
 function pickTile(id){
   const p=S.picker; const o=p.idx!=null?S.shop.offers[p.idx]:null;
   const t=S.bag.find(b=>b.id===id); if(!t) return;
   if(p.mode==='ench'){ if(p.ench==='ink'&&!famOf(t.ch)){toast('الحبر يحتاج حرفًا له عائلة نقاط');return;} t.ench=p.ench; pay(o); pathFeedback('bag'); }
   else if(p.mode==='remove'){ if(S.bag.length<=4){toast('لا يقل الكيس عن ٤ حروف');return;} S.bag=S.bag.filter(b=>b.id!==id); S.gold-=2; S.shop.removed=true; }
   else if(p.mode==='replace'){ t.ch=p.ch; t.ench=null; pay(o); }
-  S.picker=null; audio('seal',1); render();
+  S.picker=null; audio('seal',1); comboCheck(); render();
 }
 function pickLetter(ch){
   const o=S.shop.offers[S.picker.idx];
   if(S.bag.length>=bagCap()){ S.picker={mode:'replace',ch,idx:S.picker.idx}; render(); return; }
   S.bag.push({id:uid++,ch,ench:null}); pay(o); S.picker=null; audio('seal',1); render();
 }
-function pickRow(r){ const o=S.shop.offers[S.picker.idx]; S.rowMods[r]=S.picker.mod; pay(o); S.picker=null; audio('seal',1); pathFeedback(o.path); render(); }
+function pickRow(r){ const o=S.shop.offers[S.picker.idx]; S.rowMods[r]=S.picker.mod; pay(o); S.picker=null; audio('seal',1); pathFeedback(o.path); comboCheck(); render(); }
 function reroll(){ if(S.gold<S.shop.reroll) return; S.gold-=S.shop.reroll; S.shop.reroll++; S.shop.offers=genOffers(); render(); }
 function nextRound(){ S.round++; startRound(); render(); }
 
@@ -515,6 +560,7 @@ function render(){
     ${S.notebook.map(e=>`<span class="nb">${spaced(e.root)}<small>م${e.lvl}</small></span>`).join('')}
     ${leadP?`<button class="pathchip lead" data-path="${leadP.id}" style="--pc:${leadP.c}">مسار ${leadP.n}<b>م${pathLevelOf(lead)}</b></button>`:''}
     ${S.relics.map(r=>`<button class="relic" data-relic="${r}">${RELICS[r].n}</button>`).join('')}
+    ${comboState().live.map(c=>`<button class="combo" data-combo="${c.n}">⁂ ${c.n}</button>`).join('')}
     ${S.chain>0?`<span class="chain ${S.chain>=2?'hot':''}">سلسلة ${S.chain} ×${fmt(chainM)}</span>`:''}
     ${S.boss&&S.boss.id==='rhyme'&&S.lastEnd?`<span class="bossnote">ابدأ بـ«${S.lastEnd}»</span>`:''}
     <button class="linkbtn" data-act="book">الأوزان والكيس</button>
@@ -629,17 +675,27 @@ function offerHTML(x,i){
   const path=x.path?PATHS.find(p=>p.id===x.path):null;
   const serves=path&&S.shop&&x.path===S.shop.lead;
   const pathTag=path?`<span class="pathtag" style="--pc:${path.c}">${path.n}${serves?' ✓ يخدم مسارك':''}</span>`:'';
-  return `<button class="offer ${cls} ${serves?'serves':''} ${x.sold?'sold':''}" data-buy="${i}" ${S.gold<x.cost?'disabled':''}>
-    <span class="kind">${kind}</span><span class="nm">${nm}</span><span class="ds">${ds}</span>${pathTag}<span class="pr">${x.sold?'بيع':x.cost+' دينار'}</span></button>`;
+  /* If this offer is the missing half of a combo, say so by name. A synergy the player
+     cannot see is a coincidence, and coincidences do not make builds. */
+  const tag={relic:'relic',tool:'tool',row:'row',ench:'mark'}[x.k];
+  const fin=tag?comboState().near.find(n=>n.need===tag+':'+x.id):null;
+  const comboTag=fin?`<span class="combotag">يُكمل: ${fin.c.n}</span>`:'';
+  return `<button class="offer ${cls} ${serves?'serves':''} ${fin?'completes':''} ${x.sold?'sold':''}" data-buy="${i}" ${S.gold<x.cost?'disabled':''}>
+    <span class="kind">${kind}</span><span class="nm">${nm}</span><span class="ds">${ds}</span>${comboTag}${pathTag}<span class="pr">${x.sold?'بيع':x.cost+' دينار'}</span></button>`;
 }
 function saveBest(){ try{const b=+localStorage.getItem('harf-best')||0; if(S.stats.total>b) localStorage.setItem('harf-best',S.stats.total);}catch(e){} }
 
 function floatAt(i,d){
   const el=document.querySelector(`.line[data-line="${i}"]`);
   const r=el?el.getBoundingClientRect():{left:innerWidth/2,width:0,top:innerHeight/2};
-  const f=document.createElement('div'); f.className='float'+(d.bad?' bad':'');
+  const f=document.createElement('div'); f.className='float'+(d.bad?' bad':'')+(d.good?' good':'');
   f.style.left=(r.left+r.width/2)+'px'; f.style.top=(r.top-6)+'px';
-  f.innerHTML=d.bad?`<div class="sc">${d.text}</div>`:`<div class="sc">+${d.score}</div><div class="eq">${d.eq}</div><div class="tg">${d.tags.map(t=>`<span>${t}</span>`).join('')}</div>`;
+  /* A float is either a score (chips × mult, with its tags) or a plain line of text. Keying
+     that off `bad` meant any good news without a score fell into the score branch and died
+     on d.tags — so key it off whether there IS a score. */
+  f.innerHTML=d.text!=null
+    ? `<div class="sc">${d.text}</div>`
+    : `<div class="sc">+${d.score}</div><div class="eq">${d.eq}</div><div class="tg">${(d.tags||[]).map(t=>`<span>${t}</span>`).join('')}</div>`;
   document.body.appendChild(f); setTimeout(()=>f.remove(),1700);
 }
 let toastT=null;
@@ -661,7 +717,7 @@ function audio(kind,lvl=0){
 
 let prevPhase='play';
 document.addEventListener('click',e=>{
-  const b=e.target.closest('[data-seal],[data-act],[data-buy],[data-pick],[data-letter],[data-relic],[data-mod],[data-start],[data-line],[data-starter],[data-write],[data-replace],[data-row],[data-path],[data-tool],[data-char]');
+  const b=e.target.closest('[data-seal],[data-act],[data-buy],[data-pick],[data-letter],[data-relic],[data-mod],[data-start],[data-line],[data-starter],[data-write],[data-replace],[data-row],[data-path],[data-tool],[data-char],[data-combo]');
   if(!b||!S) return;
   const D=b.dataset;
   if(D.seal!=null) return seal(+D.seal);
@@ -675,6 +731,7 @@ document.addEventListener('click',e=>{
   if(D.replace!=null) return replaceRoot(+D.replace);
   if(D.relic){ const r=RELICS[D.relic]; return toast(`<b>${r.n}</b> — ${r.d}`); }
   if(D.tool) return useTool(D.tool);
+  if(D.combo){ const c=COMBOS.find(x=>x.n===D.combo); return toast(`<b>⁂ ${c.n}</b> — ${c.d}`); }
   if(D.char){ const c=CHARS.find(x=>x.id===D.char); return toast(`<b>${c.n}</b> — ${c.d}`); }
   if(D.mod){ const m=ROWMODS[D.mod]; return toast(`<b>سطر ${m.n}</b> — ${m.d}`); }
   if(D.path){ const p=PATHS.find(x=>x.id===D.path), lv=pathLevelOf(D.path); return toast(`<b style="color:${p.c}">${p.n}</b>${lv>0?' · م'+lv:''} — ${p.d}`); }

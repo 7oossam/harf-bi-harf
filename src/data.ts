@@ -92,6 +92,7 @@ export const RELICS={
   minkhal:{n:'المِنْخَل',hook:'pile',path:'bag',d:'ترى الحرفين القادمين بدل حرف واحد.'},
   khabiya:{n:'الخابية',hook:'pile',path:'bag',d:'كومة الجولة أربع نسخ من كل حرف بدل ثلاث — جولة أطول.'},
   ghirbal:{n:'الغِربال',hook:'pile',d:'+٢ حرقة في كل جولة.'},
+  ramad:{n:'الرَّماد',hook:'pile',d:'كل حرف تحرقه يضيف قيمته ×٣ إلى نقاط ختمك التالي.'},
   qura:{n:'القُرْعة',hook:'pile',path:'bag',d:'تبدأ كل جولة وأغلى حروف كيسك في يدك.'},
 
   /* --- hand: the tile you are holding --- */
@@ -109,13 +110,14 @@ export const RELICS={
   shadd:{n:'المُشَدِّد',hook:'word',d:'الحرفان المتماثلان المتجاوران يُحسبان أربع مرات في النقاط.'},
   ablind:{n:'الجَذْر الأعمى',hook:'word',path:'root',d:'كل كلمة تُحسب كأن جذرها في دفترك بمستوى ١.'},
   shadh:{n:'الشّاذّ',hook:'word',d:'كلمة من حرفين تُقبل، وتُحسب كأنها من أربعة.'},
-  taarif:{n:'أل التعريف',hook:'word',d:'كل كلمة تُحسب كأن فيها «ال»: +١ مضاعف.'},
+  taarif:{n:'أل التعريف',hook:'word',d:'كل كلمة تُحسب كأن فيها «ال»: +١ مضاعف، وطولها +١.'},
 
   /* --- seal: what it costs and what it pays --- */
   miqass:{n:'المِقَصّ',hook:'seal',d:'الختم يشطب نصف حروف الكلمة من الكومة فقط.'},
   khayt:{n:'خيط الحبر',hook:'seal',path:'chain',d:'ختم كلمة يختم تلقائيًا كل سطر آخر فيه كلمة مكتملة.'},
   midad:{n:'المِداد',hook:'seal',path:'pattern',d:'إن جاءت كلمتك على وزن الجولة، رُدَّ إليك الختم.'},
-  raha:{n:'حجر الرحى',hook:'seal',path:'chain',d:'كل سطر ينكسر يمنحك +٠٫٥ مضاعف دائم طوال الرحلة.'},
+  raha:{n:'حجر الرحى',hook:'seal',path:'chain',d:'كل سطر تخسره — كسرًا أو حشوًا — يمنحك +٠٫٥ مضاعف دائم.'},
+  misann:{n:'المِسَنّ',hook:'seal',d:'كل ختم يردّ شحنة واحدة إلى كل أداة تملكها.'},
 
   /* --- score & the two Arabic axes --- */
   mihbara:{n:'المِحْبَرة',hook:'score',path:'root',d:'خانة زائدة في الدفتر، وجذور الدفتر تكسب الخبرة مضاعفة.'},
@@ -169,6 +171,59 @@ export const ENCH={
   anchor:{n:'مِرْساة',d:'السطر الذي فيه هذا الحرف لا ينكسر.'},
   seed:{n:'بَذْرة',d:'إن كان حرفًا أصليًا (لا زائدة): كلمته ×٢.'},
   heavy:{n:'مُثْقَل',d:'يُحسب حرفين في طول الكلمة، فيبلغ بها الأوزان الطويلة.'},
+};
+
+/* ================= المُؤتلِفات — COMBOS =================
+   Hades names its duo boons, and that is most of why its builds feel like builds: a
+   synergy nobody can see is not a synergy, it is a coincidence. Each entry is a pair (or
+   trio) that is worth more than its parts, named so the player can aim at it.
+
+   Ids are namespaced because a combo crosses categories — that crossing is the point:
+   `char:` `relic:` `tool:` `row:` `mark:`. The shop reads this table to bias its offers
+   toward whatever you are one piece away from, so a build you start is a build you can
+   finish instead of one the shuffle has to hand you. */
+export const COMBOS=[
+  {n:'الحرف المشدَّد', parts:['relic:shadd','mark:echo'],
+   d:'الصدى يعيدك بنسخة من الحرف، فتضعه بجوار نفسه، والمُشدِّد يحسب المتجاورَين أربع مرات.'},
+  {n:'نقطة على نقطة', parts:['relic:shadd','tool:naqta'],
+   d:'تنقل النقطة حتى يطابق الحرفُ جارَه، فتصنع الشدّة بيدك بدل أن تنتظرها.'},
+  {n:'الطاحونة', parts:['relic:qalam','relic:raha'],
+   d:'السطر لا ينكسر بل يصير حشوًا، والرحى تدفع عن كل خراب: الخسارة صارت محرّكًا.'},
+  {n:'الميزان المذهَّب', parts:['char:nahwi','row:mizan'],
+   d:'وزن الجولة ×٣ عند النحوي و×٣ في سطر الميزان — والوزّان يضاعفهما.'},
+  {n:'مِداد لا ينفد', parts:['relic:midad','row:mizan'],
+   d:'الوزن يدفع ×٣ ويردّ الختم: على هذا السطر تختم بلا أن تُنقص حصّتك.'},
+  {n:'الكيس الأعزل', parts:['char:badawi','relic:yatim'],
+   d:'ثمانية حروف ثم سبعة: ×١٫٥ للبدوي و×٣ لليتيم على كل كلمة.'},
+  {n:'الجذر الراسخ', parts:['relic:ishtiqaq','mark:free'],
+   d:'الحرف الطليق لا يُشطب من الكومة فيعود إليك، فتكرّر الجذر نفسه والاشتقاق يضاعفه.'},
+  {n:'الدفتر العميق', parts:['char:mujami','relic:mihbara'],
+   d:'ست خانات في الدفتر، والخبرة مضاعفة مرتين: جذورك ترتقي أسرع مما تُنسى.'},
+  {n:'المَنْبَت', parts:['relic:ablind','row:manbat'],
+   d:'الجذر الأعمى يجعل كل جذر كأنه في دفترك، وسطر المنبت يضاعف ما في الدفتر ×٣.'},
+  {n:'صَرْف العملة', parts:['char:sarraf','row:gold'],
+   d:'كل ختم في سطر الذهب يموّل أكثر من نصف ختم جديد: الأختام تصير دخلًا.'},
+  {n:'المدّ الطويل', parts:['mark:heavy','row:long'],
+   d:'المُثقَل يُحسب حرفين، فيبلغ بكلمتك سقف الطِوال وأنت تملك حروفًا أقل.'},
+  {n:'المرآتان', parts:['relic:qalb','tool:mirat'],
+   d:'القلب يقبل المقلوب، والمرآة تقلب السطر فتختار أي الوجهين يُحتسب.'},
+  {n:'السِّنان', parts:['relic:misann','tool:isfinja'],
+   d:'الإسفنجة شحنة واحدة في الجولة، والمِسَنّ يردّها مع كل ختم: امسح ما شئت.'},
+  {n:'الرماد الحارق', parts:['relic:ramad','relic:ghirbal'],
+   d:'خمس حرقات في الجولة، وكل محروق يُضاف إلى الختم التالي: الحرق صار ادّخارًا.'},
+  {n:'الخابية المقصوصة', parts:['relic:khabiya','relic:miqass'],
+   d:'كومة أطول بنسخة، وختم يشطب نصف ما يشطب: الجولة تطول مرتين.'},
+  {n:'القُرعة المحفوظة', parts:['relic:qura','tool:kaff'],
+   d:'تبدأ الجولة بأغلى حروفك، والكفّ يحفظه حتى يجيء السطر الذي يستحقه.'},
+];
+/* which ids a run currently owns, in the namespaced form COMBOS uses */
+export const ownedIds=S=>{
+  const o=['char:'+S.charId];
+  for(const r of S.relics) o.push('relic:'+r);
+  for(const t of Object.keys(S.tools||{})) o.push('tool:'+t);
+  for(const m of S.rowMods) if(m) o.push('row:'+m);
+  for(const t of S.bag) if(t.ench) o.push('mark:'+t.ench);
+  return new Set(o);
 };
 
 export const BOSSES={

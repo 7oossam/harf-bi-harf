@@ -286,3 +286,10 @@ button:focus-visible,.line:focus-visible{outline:2px solid var(--ink);outline-of
 .choice.chars .rule{color:var(--rubric);font-size:13px;line-height:1.45}
 .choice.chars .why{opacity:.7;font-size:12px;line-height:1.45}
 .choice.chars .stat{font-size:11px;opacity:.55;font-variant-numeric:tabular-nums}
+.float.good .sc{color:var(--verdigris)}
+
+/* ===== المؤتلفات — live combos ===== */
+.combo{background:none;border:none;padding:0;font-size:11px;color:var(--verdigris);cursor:pointer;font-weight:600}
+.combotag{font-size:11px;color:var(--verdigris);border:1px solid var(--verdigris);
+  border-radius:4px;padding:1px 6px;align-self:flex-start}
+.offer.completes{border-color:var(--verdigris)}
