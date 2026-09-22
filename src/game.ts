@@ -684,12 +684,14 @@ function render(){
     if(ok&&S.seals>0){const p=scoreWord(L,s,i); sealBtn=`<button class="seal" data-seal="${i}">ختم<small>+${p.score}</small><small class="cost">−${L.length} بطاقة</small></button>`;}
     else if(junk&&L.length) sealBtn=`<button class="seal junkseal" data-seal="${i}">امسح<small>+${3*s.length}</small></button>`;
     const mod=S.rowMods[i];
-    const startHint=S.phase==='play'&&!junk&&S.lock[i]<=0?stateOf(i,S.cur,true):null;
+    const endHint=S.phase==='play'&&!junk&&S.lock[i]<=0?stateOf(i,S.cur,false):null;
+    const sh=S.phase==='play'&&!junk&&S.lock[i]<=0&&isRad(S.cur)?stateOf(i,S.cur,true):null;
+    const startHint=sh&&sh!==endHint?sh:null;
     const wh=S.phase==='play'?waznHint(i):null;
     h+=`<div class="line ${hint?'h-'+hint:''} ${junk?'junk':''} ${S.lock[i]>0?'locked':''} ${fxc}" data-line="${i}" tabindex="0" role="button" aria-label="السطر ${i+1}">
       ${startHint?`<div class="startzone" data-start="${i}"></div>`:''}
       <div class="tags"><span style="display:flex;gap:6px"><span class="hintlab">${HINTLAB[hint]||''}</span>${startHint?`<span class="hintlab zs z-${startHint}">الأول: ${HINTLAB[startHint]||''}</span>`:''}${wh?`<span class="waznhint">+${wh} ← ${waznOf(S.wazn).n}</span>`:''}</span><span style="display:flex;gap:6px">${mod?`<span class="modlab" data-mod="${mod}">${ROWMODS[mod].n}</span>`:''}<span class="cap">${nRad(L)}/${RADMAX()} أصول${L.filter(c=>c.k==='a').length?` · ${L.filter(c=>c.k==='a').length} زيادة`:''}</span></span></div>
-      <div class="lm"><div class="word ${ok?'ok':''} ${junk?'junk':''}">${s?(ok?displayOf(s):s):'<span class="ph">· · ·</span>'}</div>
+      <div class="lm"><div class="word ${ok?'ok':''} ${junk?'junk':''}">${(ok||junk||L.some(c=>c.k==='a'))&&s?(ok?displayOf(s):s):''}</div>
       ${rootl}
       <div class="slots">${(()=>{const rad=L.filter(isRad),used=L.filter(c=>c.k==='a');
         const at=k=>used.filter(c=>seatOf(c,c.seat)===k).map(c=>`<span class="aff">${afOf(c).t}</span>`).join('');

@@ -56,10 +56,10 @@ button:focus-visible,.line:focus-visible{outline:2px solid var(--ink);outline-of
 
 /* ---------- the ruled text block: where the game lives ---------- */
 /* the text block sits in the page's margins rather than filling it */
-.lines{flex:0 1 auto;margin-block:2px auto;display:flex;flex-direction:column;min-height:0;
+.lines{flex:1 1 auto;margin-block:2px;display:flex;flex-direction:column;min-height:0;
   border:1px solid var(--ink);background:rgba(255,255,255,.3)}
 .line{position:relative;display:flex;align-items:center;gap:10px;
-  padding:8px 14px;height:112px;cursor:pointer;border-bottom:1px solid var(--rule);
+  padding:8px 14px;flex:1 1 0;min-height:84px;cursor:pointer;border-bottom:1px solid var(--rule);
   transition:background .15s,border-color .15s}
 .line:last-child{border-bottom:none}
 .line:active{background:rgba(27,23,20,.05)}
@@ -78,8 +78,8 @@ button:focus-visible,.line:focus-visible{outline:2px solid var(--ink);outline-of
 .h-full .hintlab{color:var(--ink2)}
 .line.locked{opacity:.4}
 .line.junk{background:repeating-linear-gradient(135deg,rgba(27,23,20,.06) 0 6px,transparent 6px 12px)}
-.lm{flex:1;display:flex;flex-direction:column;justify-content:center;gap:1px;min-width:0}
-.word{font-family:var(--naskh);font-weight:700;font-size:40px;line-height:1.2;color:var(--ink);
+.lm{flex:1;display:flex;flex-direction:column;justify-content:center;gap:2px;min-width:0;padding-top:12px}
+.word{font-family:var(--naskh);font-weight:700;font-size:34px;line-height:1.15;color:var(--ink);min-height:0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .word.ok{color:var(--seal)}
 .word.junk{color:var(--ink2);text-decoration:line-through;text-decoration-color:var(--rubric)}
@@ -88,8 +88,8 @@ button:focus-visible,.line:focus-visible{outline:2px solid var(--ink);outline-of
 .chips{display:flex;gap:3px;align-items:center}
 .chip{min-width:17px;height:18px;padding:0 3px;background:var(--ink);color:var(--page);
   font-family:var(--naskh);font-size:12px;display:grid;place-items:center;line-height:1;border-radius:2px}
-.tags{position:absolute;top:3px;inset-inline:12px;display:flex;justify-content:space-between;
-  pointer-events:none;gap:6px;font-size:10px}
+.tags{position:absolute;top:4px;inset-inline:12px;display:flex;justify-content:space-between;
+  pointer-events:none;gap:6px;font-size:10px;z-index:2}
 .hintlab{font-family:var(--ui);color:var(--ink2)}
 .h-word .hintlab{color:var(--seal);font-weight:600}
 .h-alive .hintlab{color:var(--verdigris)}
@@ -261,7 +261,7 @@ button:focus-visible,.line:focus-visible{outline:2px solid var(--ink);outline-of
 .loading{color:var(--ink2)}
 
 @media (max-height:700px){
-  .line{height:86px}.word{font-size:32px}.tile.big{width:68px;height:68px;font-size:44px}
+  .line{min-height:74px}.word{font-size:30px}.tile.big{width:64px;height:64px;font-size:40px}
   .seal{width:58px;height:58px;font-size:13px}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
@@ -298,19 +298,26 @@ button:focus-visible,.line:focus-visible{outline:2px solid var(--ink);outline-of
    An أصل carries meaning, a زيادة builds the wazn onto it. Colour is semantic here as
    everywhere: ink for radicals (the root is the substance), glaze for affixes (the shape
    laid over it). A radical from one of YOUR roots is inked solid; a stray one is outlined. */
-.tile.card-rad{border:1px solid var(--rule);color:var(--ink)}
-.tile.card-rad.own{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
-.tile.card-aff{background:var(--glaze,#E9E2CE);border:1px dashed var(--lapis);color:var(--lapis);
-  font-family:var(--ui);font-size:15px}
+/* The base .tile is ink-on-paper INVERTED (dark ground, light glyph) from the letter game.
+   A card is a card: paper with ink on it. Overriding only `color` left ink on ink — a solid
+   black square with an invisible letter. Set the ground too, always, whenever colour changes. */
+.tile.card-rad{background:var(--page);color:var(--ink);border:1px solid var(--rule);
+  box-shadow:0 1px 0 rgba(0,0,0,.06)}
+.tile.card-rad.own{border-color:var(--ink);border-width:1.5px}
+.tile.card-rad .val{opacity:.65}
+.tile.card-aff{background:var(--page);border:1px dashed var(--lapis);color:var(--lapis);
+  font-family:var(--naskh);font-size:34px;font-weight:700;box-shadow:0 1px 0 rgba(0,0,0,.06)}
+.tile.card-aff.small{font-size:19px}
 .tile.card-aff .seat{position:absolute;bottom:2px;inset-inline-start:0;inset-inline-end:0;
   text-align:center;font-size:8px;opacity:.7;letter-spacing:0}
 .tile.card-aff .val{color:var(--lapis)}
 
 /* the row's root slots: three seats you can see filling */
 .slots{display:flex;gap:4px;align-items:center;justify-content:flex-start;margin-top:3px;flex-wrap:wrap}
-.slot{min-width:20px;height:22px;line-height:22px;text-align:center;border-bottom:1.5px solid var(--rule);
-  font-family:var(--naskh);font-size:17px;color:var(--ink2)}
+.slot{min-width:26px;height:30px;line-height:30px;text-align:center;border-bottom:2px solid var(--rule);
+  font-family:var(--naskh);font-size:22px;font-weight:700;color:var(--rule)}
 .slot.has{border-bottom-color:var(--ink);color:var(--ink)}
+.slots .aff+.slot,.slot+.aff{margin-inline-start:2px}
 .slots .aff{font-size:13px;color:var(--lapis);border:1px dashed var(--lapis);border-radius:4px;padding:0 5px;line-height:19px}
 .nb.lit{color:var(--ink);font-weight:600}
 .offer.k-aff .nm{color:var(--lapis)}
