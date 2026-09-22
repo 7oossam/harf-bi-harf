@@ -81,7 +81,11 @@ const freshPiles=()=>{
   const barren=S.boss&&S.boss.id==='barren';
   const rad=[], aff=[];
   for(const c of S.bag){
-    if(c.k==='a'){ if(!barren&&!has('samt')) aff.push(c.id); }   // القحط / الصَّمت: no زوائد fall
+    if(c.k==='a'){
+      if(barren||has('samt')) continue;                      // القحط / الصَّمت: no زوائد fall
+      aff.push(c.id);
+      if(has('nussakh')) aff.push(c.id);                     // النُّسّاخ: one more use of each, each round
+    }
     else for(let i=0;i<n;i++) rad.push(c.id);
   }
   return {rad:shuffle(rad),aff:shuffle(aff)};
@@ -91,18 +95,21 @@ const pileLeft=()=>S.radDraw.length+S.affDraw.length+S.top.length;
 /* Sealing strikes the word's own cards out of what is still to fall — Scrabble's "leave".
    A longer word scores more and costs you more of your own round.
    التَّضعيف spares the first affix in a row, so an affix build is not self-consuming. */
-/* Radicals are struck from the ROUND's pile (Scrabble's leave). Affixes are struck from the
-   BAG — they do not come back next round, or ever. التَّضعيف spares the first one in a row and
-   طَليق spares its card entirely, which is what makes both worth owning now. */
-function consumeAffixes(tiles){
-  if(has('naht')){ S.gold=Math.max(0,S.gold-2); return; }   // nothing spends; the seal costs coin
+/* زوائد are COPIES, not consumables. You own N copies of «ال» and that is N uses PER ROUND —
+   spend them and they are back next round; buy it again and you have two. Hussam's correction,
+   and it is better than what I built: permanent consumption made the shop a re-buying treadmill,
+   while copies keep the only question that matters — is THIS word worth my one «ال» this round?
+   Using one simply means it has left the round's pile, which `advance` already handles; so the
+   work here is putting a card BACK when something says it does not count. */
+function refundAffixes(tiles,row){
+  if(has('naht')){ S.gold=Math.max(0,S.gold-2); return; }   // النَّحت: nothing counts, the seal costs coin
   let spared=!has('tadeef');
   for(const c of tiles){
     if(c.k!=='a'||!c.id) continue;
-    if(c.ench==='free') continue;
-    if(!spared){ spared=true; continue; }
-    S.bag=S.bag.filter(b=>b.id!==c.id);
+    const free=c.ench==='watad'||S.rowMods[row]==='khizana';
+    if(free||!spared){ if(!free) spared=true; S.affDraw.push(c.id); }   // back into this round's pile
   }
+  if(S.affDraw.length) shuffle(S.affDraw);
 }
 function spendCards(tiles){
   let gone=0;
@@ -170,7 +177,7 @@ function startRound(){
   const r=S.round;
   Object.assign(S,{target:TARGETS[r-1],score:0,drops:S.dropsMax,burns:S.burnsMax,
     lines:[[],[],[],[]],junk:[false,false,false,false],lock:[0,0,0,0],fixed:[0,0,0,0],chain:0,sealedSinceDrop:true,
-    rootCounts:{},roundRoots:{},lastEnd:null,lastRoot:null,mirajN:0,ash:0,dropCount:0,log:[],top:[],held:null,freeSeal:isChar('warraq'),
+    rootCounts:{},roundRoots:{},lastEnd:null,lastRoot:null,mirajN:0,ash:0,dropCount:0,log:[],top:[],held:null,freeSeal:isChar('warraq'),mamalUsed:false,
     radDraw:[],affDraw:[],sel:'r',curR:null,curA:null,nextR:null,nextA:null,seals:sealsFor(),boss:null,wazn:'thulathi',phase:'intro',shop:null,picker:null,nbOffer:null});
   if(BOSS_ROUNDS.includes(r)){
     const pool=r===3?['blind','termite','dry']:r===6?['rhyme','barren','rush']:Object.keys(BOSSES);
@@ -328,7 +335,6 @@ function scoreWord(tiles,s,row){
   const naff=aff.length, mod=S.rowMods[row];
   for(const c of tiles){
     let v=cardVal(c);
-    if(mod==='usul'&&isRad(c)) v*=2;
     chips+=v;
   }
   const len=s.length;
@@ -338,7 +344,7 @@ function scoreWord(tiles,s,row){
   let mult=1+Math.max(0,len-3);
   /* every زيادة is worth its own printed multiplier — this is where a long word pays */
   if(naff){
-    let am=0; for(const c of aff) am+=afOf(c).m+(has('mushtaqq')?1:0)+(mod==='ziyada'?2:0);
+    let am=0; for(const c of aff) am+=afOf(c).m;
     mult+=am; tags.push(`${naff} زيادة +${fmt(am)}`);
   }
   /* الصَّرْف — stacking has to JUMP, not step. Measured with a flat per-affix multiplier,
@@ -350,8 +356,8 @@ function scoreWord(tiles,s,row){
   if(naff>=2){ const b=STACK[Math.min(naff,4)]; x*=b; tags.push(`صَرْف ${naff} زوائد ×${fmt(b)}`); }
   if(has('sarfi')&&naff>=3){ x*=3; tags.push('الصَّرْفي ×٣'); }
 
-  const p=patOf(s);
-  if(p){ const lv=S.patLv[p.id]||1, com=p.id===S.wazn;
+  const p=mod==='minwal'?waznOf(S.wazn):patOf(s);
+  if(p){ const lv=S.patLv[p.id]||1, com=p.id===S.wazn||mod==='minwal';
     const commission=com?(mod==='mizan'?3:2):1;
     const k=(has('wazzan')?2:1)*commission;
     chips+=Math.round(p.c*(1+.5*(lv-1)))*k; mult+=(p.m+lv-1)*k; tags.push('وزن '+p.n+(lv>1?' م'+lv:''));
@@ -381,9 +387,7 @@ function scoreWord(tiles,s,row){
   }
   if(S.chain>0){const m=1+.5*S.chain; x*=m; tags.push('سلسلة ×'+fmt(m));}
   const glass=tiles.filter(c=>c.ench==='glass').length; if(glass){x*=2**glass; tags.push('زجاج ×'+(2**glass));}
-  if(mod==='double'){x*=2;tags.push('سطر مضاعف ×٢');}
   if(mod==='manbat'&&nb&&!nb.blind){x*=3;tags.push('مَنْبَت ×٣');}
-  if(mod==='tawil'&&len>=6){x*=3;tags.push('طِوال ×٣');}
   if(has('yatim')&&S.roots.length<=3){x*=3;tags.push('يتيم ×٣');}
   if(S.boss&&S.boss.id==='rhyme'&&S.lastEnd&&s[0]!==S.lastEnd){x*=.5;tags.push('بلا قافية ×½');}
   return {chips,mult:mult*x,score:Math.round(chips*mult*x),tags,root,pat:p?p.id:null,naff};
@@ -563,10 +567,11 @@ function seal(i,auto){
   if(S.rowMods[i]==='gold') S.gold+=3;
   if(isChar('tajir')&&r.naff){ S.gold+=r.naff; floatAt(i,{good:true,text:`التاجر +${r.naff} دينار`}); }
   tiles.filter(t=>t.ench==='glass'&&t.id).forEach(t=>{S.bag=S.bag.filter(b=>b.id!==t.id);});
-  const gone=spendCards(tiles); consumeAffixes(tiles);
+  const gone=spendCards(tiles); refundAffixes(tiles,i);
   /* Three ways a seal can come back: the copyist's first one is free, المِداد refunds a
      word that answered the round's commission, and the money-changer buys more. */
-  if(S.freeSeal){ S.freeSeal=false; floatAt(i,{good:true,text:'ختم الوَرّاق: مجّانًا'}); }
+  if(S.rowMods[i]==='mamal'&&!S.mamalUsed){ S.mamalUsed=true; floatAt(i,{good:true,text:'المَعْمَل: ختم مجّاني'}); }
+  else if(S.freeSeal){ S.freeSeal=false; floatAt(i,{good:true,text:'ختم الوَرّاق: مجّانًا'}); }
   else if(has('midad')&&r.pat===S.wazn){ floatAt(i,{good:true,text:'المِداد: رُدَّ الختم'}); }
   else S.seals--;
   S.ash=0;
@@ -576,7 +581,7 @@ function seal(i,auto){
   /* التَّصريف — the root stays in its row and only the زوائد are spent, so one جذر can be
      conjugated again and again: كتب ← كاتب ← مكتوب ← كتاب. The most run-changing relic in
      the pool, and the most Arabic thing the game does. */
-  S.lines[i]=has('tasrif')?tiles.filter(isRad).map(c=>({...c})):[];
+  S.lines[i]=(has('tasrif')||S.rowMods[i]==='rahim')?tiles.filter(isRad).map(c=>({...c})):[];
   fx={line:i,kind:'sealed'};
   if(S.rowMods[i]==='echo') S.lines[i]=[{id:null,ch:s[s.length-1],ench:null}];
   if(S.boss&&S.boss.id==='dry') S.lock[i]=1;
@@ -603,9 +608,7 @@ function endOfDrops(){
 }
 function winRound(){
   const boss=!!S.boss;
-  /* زوائد are consumed now, so gold is a supply line, not a savings account: the base rises
-     and beating the target pays more, because every round you must re-stock. */
-  const base=6+(boss?4:0), over=Math.max(0,Math.min(12,Math.floor((S.score/S.target-1)*10))), interest=Math.min(4,Math.floor(S.gold/6));
+  const base=5+(boss?3:0), over=Math.max(0,Math.min(10,Math.floor((S.score/S.target-1)*9))), interest=Math.min(5,Math.floor(S.gold/5));
   S.earn={base,over,interest,total:base+over+interest};
   S.gold+=S.earn.total; audio('win');
   if(S.round>=TARGETS.length){ S.phase='victory'; render(); return; }
@@ -700,13 +703,12 @@ function buy(idx){
   else if(o.k==='patup'){ S.patLv[o.id]=(S.patLv[o.id]||1)+1; pay(o); pathFeedback('pattern'); }
   else if(o.k==='ench') S.picker={mode:'ench',ench:o.id,idx};
   else if(o.k==='affix'){
-    /* A purchase is a magazine, not a card: زوائد are spent on use, so one buy has to be
-       worth several words. الشاعر and الزائدة now add rounds to the magazine instead of
-       multiplying a permanent pile. */
-    const n=3+(isChar('shair')?2:0)+(has('zaida')?2:0);
-    for(let i=0;i<n;i++) S.bag.push({id:uid++,k:'a',a:o.id,ench:null});
+    /* ONE copy per purchase — buying the same زيادة twice is exactly how you get two uses in
+       a round, which is the whole shape of the decision. */
+    S.bag.push({id:uid++,k:'a',a:o.id,ench:null});
+    const n=S.bag.filter(c=>c.k==='a'&&c.a===o.id).length;
     pay(o); pathFeedback('pattern');
-    toast(`<b>${AFFIX[o.id].n} «${AFFIX[o.id].t}»</b> ×${n} — ${AFFIX[o.id].d}`);
+    toast(`<b>${AFFIX[o.id].n} «${AFFIX[o.id].t}»</b> — ${n} ${n>1?'نسخ':'نسخة'} في الجولة · ${AFFIX[o.id].d}`);
   }
   else if(o.k==='root'){ adoptRoot(o.id); if(S.notebook.length<nbSlots()) S.notebook.push({root:o.id,lvl:1,xp:0}); pay(o); pathFeedback('root'); }
   else if(o.k==='row') S.picker={mode:'row',mod:o.id,idx};
@@ -787,8 +789,7 @@ function render(){
       const bits=[]; if(r) bits.push(`<span class="${nb?'nbk':''}">${spaced(r)}${nb?' من الدفتر':''}</span>`); if(c) bits.push(`رنين <b>×${c+1}</b>`); if(p) bits.push('وزن '+p.n);
       rootl=bits.length?`<div class="rootlab">${bits.map(b=>`<span>${b}</span>`).join('')}</div>`:''; }
     let sealBtn='';
-    if(ok&&S.seals>0){const p=scoreWord(L,s,i); const na=L.filter(c=>c.k==='a').length-(has('tadeef')?1:0);
-      sealBtn=`<button class="seal" data-seal="${i}">ختم<small>+${p.score}</small>${na>0?`<small class="cost burn">تُنفق ${na} زيادة</small>`:`<small class="cost">−${L.length} بطاقة</small>`}</button>`;}
+    if(ok&&S.seals>0){const p=scoreWord(L,s,i); sealBtn=`<button class="seal" data-seal="${i}">ختم<small>+${p.score}</small><small class="cost">−${L.length} بطاقة</small></button>`;}
     else if(junk&&L.length) sealBtn=`<button class="seal junkseal" data-seal="${i}">امسح<small>+${3*s.length}</small></button>`;
     const mod=S.rowMods[i];
     const endHint=S.phase==='play'&&!junk&&S.lock[i]<=0?stateOf(i,S.cur,false):null;
@@ -819,7 +820,7 @@ function render(){
       <button class="pilecard ${S.sel==='a'?'on':''}" data-sel="a" ${S.curA?'':'disabled'}>
         ${has('kashf')?'<span class="kashfmark">كَشْف</span>':''}
         ${tileHTML(S.curA,'big')}
-        <span class="plabel ${S.affDraw.length<=2?'low':''}">ذخيرة الزوائد · ${S.affDraw.length}</span>
+        <span class="plabel ${S.affDraw.length<=1?'low':''}">زوائد · ${S.affDraw.length} هذه الجولة</span>
         ${hideNext?'':`<span class="pnext">${tileHTML(S.nextA,'small')}</span>`}
       </button>
     </div>
@@ -1054,7 +1055,12 @@ function start(data){
    the first attempt "verified" eight of them without granting a single one. */
 if(location.search.includes('dev=1')) (window as any).__dev={
   grant:(...ids)=>{ for(const id of ids) if(RELICS[id]&&!S.relics.includes(id)) S.relics.push(id); render(); },
-  give:(a,n=6)=>{ for(let i=0;i<n;i++) S.bag.push({id:uid++,k:'a',a,ench:null}); render(); },
+  give:(a,n=1)=>{ for(let i=0;i<n;i++) S.bag.push({id:uid++,k:'a',a,ench:null});
+    /* rebuild the round's piles, or a card given mid-round is invisible until the next one —
+       which made the first copies test read "زوائد · 0" and nearly sent me hunting a bug */
+    const pl=freshPiles(); S.radDraw=pl.rad; S.affDraw=pl.aff; S.curA=drawFrom('a'); S.nextA=drawFrom('a'); syncHand(); render(); },
+  row:(i,mod)=>{ S.rowMods[i]=mod; render(); },
+  mark:(i,e)=>{ if(S.bag[i]) S.bag[i].ench=e; render(); },
   state:()=>S,
 };
 loadDict().then(()=>{

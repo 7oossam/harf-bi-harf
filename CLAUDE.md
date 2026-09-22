@@ -133,21 +133,36 @@ not a price bump.
 whole run of shopping, and the first attempt to verify these eight "passed" all of them without
 granting a single one — the rows behaved identically and I nearly believed it.
 
-**زوائد are ammunition, not upgrades.** Hussam, after playing: "affix cards, once bought, are
-unlimited — I expect that is wrong." So أصول and زوائد are now economically different things,
-which is also what they are linguistically:
+**زوائد are COPIES that refresh each round, not consumables.** Hussam, in two corrections.
+First: "affix cards, once bought, are unlimited — that is wrong." Then, when I made them
+permanently consumed: "I don't mean you re-buy them. Each round you have one copy; if you use
+it this round you can't use it again *that round*; buy it a second time and you have two
+copies." His model is better than mine — permanent consumption turned the shop into a re-buying
+treadmill, while copies keep the only question that matters: **is THIS word worth my one «ال»
+this round?**
 
-- **أصول are a rack.** Every radical card falls `COPIES` times and the pile refills each round.
-  A root is a permanent part of who you are.
-- **زوائد are a magazine.** The affix pile is literally the cards you own, one entry each, and
-  sealing a word SPENDS its زوائد out of the bag for good (`consumeAffixes`). A purchase is
-  three cards, not one, because it has to be worth several words.
+So أصول and زوائد are economically different, which is also what they are linguistically:
 
-A permanent affix is an upgrade you buy once and forget. A spent one asks the seal-budget
-question every single time: *is THIS word worth my «ال»?* Gold had to become a supply line to
-match (base 6, over-target up to 12) — you re-stock every round or the engine stalls.
-التَّضعيف (first زيادة per word returns) and طَليق (that card never spends) are what they are
-worth owning for now.
+- **أصول are a rack.** Every radical card falls `COPIES` times, and the pile refills each
+  round. A root is a permanent part of who you are.
+- **زوائد are copies.** The round's affix pile is exactly the affix cards you own, one entry
+  each (`freshPiles`). Drawing one takes it out of that round's pile; `startRound` puts them
+  all back. A second purchase of the same زيادة is a second use per round.
+
+`refundAffixes` is the hook for anything that says a زيادة *does not count* — it pushes the
+card back into the round's pile rather than out of the bag. That is what التَّضعيف (first affix
+per word), النُّسّاخ (an extra copy of everything), النَّحت (nothing counts, seals cost gold),
+سطر الخِزانة and وسم الوَتَد all run through, and it is the axis Hussam asked for: "relics could
+add copies, or make the use not count."
+
+**Rows and marks got the same treatment as relics.** A row that says "×2 here" is a number
+wearing a row's clothes. These make the row a *different place*: **الرَّحِم** keeps the root
+standing through the seal (التَّصريف for one row), **المَعْمَل** makes the round's first seal
+there free, **الخِزانة** returns the زوائد you spend there, **المِنوال** counts every word as
+the round's وزن. Marks likewise: **الوَتَد** never counts, **التَّوأم** counts as two cards.
+
+Verified with `?dev=1`: `سطر الرَّحِم | row 3/3→3/3 | row0 radicals kept: 3`, `المَعْمَل |
+seals left: 3` after three seals, and affix cards in the bag unchanged at 2 across three seals.
 
 **The commission is only ever something you can build** (`reachableWazns`). Hussam again:
 "whether I can hit the wazn depends on which زوائد I happen to own — so am I buying an affix
