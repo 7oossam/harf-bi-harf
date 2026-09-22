@@ -70,7 +70,8 @@ for (let run = 0; run < RUNS; run++) {
       if (await sealBtn.count()) {
         const row = await sealBtn.getAttribute('data-seal');
         const wlen = (await page.locator(`.line[data-line="${row}"] .word`).innerText()).replace(/\s/g, '').length;
-        const capTxt = (await page.locator(`.line[data-line="${row}"] .cap`).innerText()).split('/');
+        // the root is closed once it holds its three أصول; only زوائد can lengthen it further
+        const capTxt = (await page.locator(`.line[data-line="${row}"] .cap`).innerText()).match(/\d+/g) || ['0','3'];
         const full = +capTxt[0] >= +capTxt[1];
         // an unspent seal is worth nothing, so cash out when the pile is nearly gone
         const desperate = left <= seals * 3;
@@ -88,7 +89,9 @@ for (let run = 0; run < RUNS; run++) {
       if (k < 0) k = cls.findIndex(c => c.includes('h-dead') || c.includes('h-bounce'));
       // a junk row still takes the drop (and wipes for scrap), so it is a fallback, not a wall
       if (k < 0) k = cls.findIndex(c => c.includes('h-junk') || c.includes('junk'));
-      if (k < 0) k = cls.findIndex(c => !c.includes('h-full') && !c.includes('locked'));
+      // h-full (root complete) and h-seat (that affix's seat is taken) both REFUSE the card:
+      // clicking one is a no-op, so treating them as fallbacks spins forever.
+      if (k < 0) k = cls.findIndex(c => !c.includes('h-full') && !c.includes('h-seat') && !c.includes('locked'));
       if (k < 0) {
         // every row refuses the tile — burn it, and if we cannot, the round cannot advance
         const burn = page.locator('[data-act="burn"]:not([disabled])');

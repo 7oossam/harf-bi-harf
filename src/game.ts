@@ -1,5 +1,5 @@
-import { loadDict, norm, IDX, DISP, ROOTS, SORTED, isAlive, isWord, hasAl, displayOf, rootOf, spaced } from './dict';
-import { VAL, LETTERS, FAM, famOf, LENB, TARGETS, BOSS_ROUNDS, DROPS, BURNS, LINE_MAX, LINE_CAPS, ZAWAID, COPIES, SEALS, BAG_CAP, NB_SLOTS, STARTERS, CHARS, TOOLS, COMBOS, ownedIds, PATTERNS, patOf, RELICS, ROWMODS, BOSSES, ENCH, PATHS, pathLvl } from './data';
+import { loadDict, norm, IDX, DISP, ROOTS, SORTED, isAlive, isWord, hasAl, displayOf, rootOf, spaced, isRoot, rootAlive, fertileRoots, RCOUNT } from './dict';
+import { VAL, LETTERS, FAM, famOf, LENB, TARGETS, BOSS_ROUNDS, DROPS, BURNS, LINE_MAX, LINE_CAPS, ZAWAID, COPIES, SEALS, BAG_CAP, NB_SLOTS, STARTERS, CHARS, TOOLS, COMBOS, ownedIds, AFFIX, AFFIX_IDS, SEATS, PATTERNS, patOf, RELICS, ROWMODS, BOSSES, ENCH, PATHS, pathLvl } from './data';
 
 /* ================= STATE ================= */
 let S=null, uid=1;
@@ -11,24 +11,85 @@ const chr=()=>CHARS.find(c=>c.id===S.charId)||CHARS[0];
 const isChar=id=>S.charId===id;
 const hasTool=id=>!!S.tools[id];
 const nLines=()=>has('rabi')?4:3;
-const bagCap=()=>isChar('badawi')?8:has('nasikh')?13:BAG_CAP;
-const nbSlots=()=>NB_SLOTS+(has('mihbara')?1:0)+(isChar('mujami')?2:0);
+const bagCap=()=>99;   // the bag is roots + affixes now; its size is not the constraint
+const nbSlots=()=>5+(has('mihbara')?2:0);   // your own roots live here, so it starts at four
 /* الرِّحاب raises every ceiling; the caps themselves stay the reason rows differ. */
-const lineMax=i=>(LINE_CAPS[i]??LINE_MAX)+(has('rihab')?2:0);
 const sealsFor=()=>chr().seals+(has('ghirbal')?0:0);
-/* The round's pile: every letter twice, shuffled, and it never refills. This is the rack. */
-const freshPile=()=>{const n=COPIES+(has('khabiya')?1:0); const ids=[]; for(let c=0;c<n;c++) for(const t of S.bag) ids.push(t.id); return shuffle(ids);};
-/* Sealing strikes the word's letters out of what is still to fall — Scrabble's "leave".
-   A long word scores more and costs you more of your own round. */
-function spendLetters(tiles){
+/* ================= CARDS, ROOTS, ASSEMBLY =================
+   A card is either an أصل (radical, k:'r') or a زيادة (affix, k:'a'). A row holds at most
+   RADMAX radicals — that is the root — and any number of affixes hung in their seats.
+   The word is assembled seat by seat: A0 + R0 + A1 + R1 + A2 + R2 + A3. */
+const RADMAX=()=>has('rihab')?4:3;
+const isRad=c=>c&&c.k==='r';
+const afOf=c=>AFFIX[c.a];
+const cardTxt=c=>!c?'':(c.k==='r'?c.ch:afOf(c).t);
+const cardVal=c=>{ if(!c) return 0; let v=c.k==='r'?(VAL[c.ch]||1):afOf(c).v;
+  if(c.ench==='gold') v*=3; if(c.ench==='seed'&&c.k==='r') v*=2; return v; };
+/* Where an affix may sit. المُلحَق frees it from its printed seat — that is the relic's
+   whole point, so it is the one place the seat is not read off the card. */
+const seatOf=(c,want)=>has('mulhaq')&&want!=null?want:afOf(c).s;
+/* Which seats a row has filled. Arabic hangs ONE زيادة per seat — كاتب has one ألف after the
+   فاء, not three — and a truly unlimited row turned into affix soup that still read as "alive",
+   because the liveness test only ever looked at the radicals. Four seats, one each: the row
+   becomes a template you watch filling, and every زيادة is a real choice of where it goes. */
+const seatsUsed=L=>new Set(L.filter(c=>c.k==='a').map(c=>seatOf(c,c.seat)));
+const seatFree=(L,c,want)=>!seatsUsed(L).has(seatOf(c,want));
+/* Assemble the row into a word. Affixes keep insertion order inside a seat. */
+function asmLine(L,extra,extraSeat){
+  const rad=L.filter(isRad), aff=L.filter(c=>c.k==='a').map(c=>({c,s:seatOf(c,c.seat)}));
+  if(extra){ if(isRad(extra)) rad.push(extra); else aff.push({c:extra,s:seatOf(extra,extraSeat)}); }
+  const at=k=>aff.filter(a=>a.s===k).map(a=>cardTxt(a.c)).join('');
+  let w=at(0);
+  for(let i=0;i<rad.length;i++){ w+=rad[i].ch; w+=at(i+1); }
+  if(rad.length<3) for(let k=rad.length+1;k<=3;k++) w+=at(k);   // seats past the root still show
+  return w;
+}
+const radStr=L=>L.filter(isRad).map(c=>c.ch).join('');
+const nRad=L=>L.filter(isRad).length;
+/* القَلْب: any ORDER of these radicals that spells a real root counts. */
+const perms=a=>a.length<=1?[a]:a.flatMap((x,i)=>perms([...a.slice(0,i),...a.slice(i+1)]).map(p=>[x,...p]));
+function rootFound(L){
+  const r=radStr(L);
+  if(r.length<3) return null;
+  if(isRoot(r)) return r;
+  if(has('qalb')) for(const p of perms([...r])){ const q=p.join(''); if(isRoot(q)) return q; }
+  return null;
+}
+/* Can these radicals still reach a real root? With القَلْب, any arrangement may. */
+function radAlive(L){
+  const r=radStr(L);
+  if(!r) return true;
+  if(rootAlive(r)) return true;
+  if(has('qalb')) for(const p of perms([...r])) if(rootAlive(p.join(''))) return true;
+  return false;
+}
+
+/* The round's pile: every card COPIES times, shuffled, and it never refills. This is the rack. */
+const freshPile=()=>{
+  const n=COPIES+(has('khabiya')?1:0);
+  const affMul=(isChar('shair')?2:1)*(has('zaida')?2:1);
+  const barren=S.boss&&S.boss.id==='barren';
+  const ids=[];
+  for(const c of S.bag){
+    if(c.k==='a'&&barren) continue;                       // القحط: roots only this round
+    const reps=n*(c.k==='a'?affMul:1);
+    for(let i=0;i<reps;i++) ids.push(c.id);
+  }
+  return shuffle(ids);
+};
+/* Sealing strikes the word's own cards out of what is still to fall — Scrabble's "leave".
+   A longer word scores more and costs you more of your own round.
+   التَّضعيف spares the first affix in a row, so an affix build is not self-consuming. */
+function spendCards(tiles){
   let gone=0;
   /* المِقَصّ pays half the leave; a طَليق letter is never struck at all. */
-  let budget=has('miqass')?Math.ceil(tiles.length/2):tiles.length;
+  let budget=has('miqass')?Math.ceil(tiles.length/2):tiles.length, spared=!has('tadeef');
   for(const t of tiles){
     if(budget<=0) break;
     if(t.ench==='free') continue;
+    if(!spared&&t.k==='a'){ spared=true; continue; }
     budget--;
-    const k=S.draw.findIndex(id=>{const b=S.bag.find(x=>x.id===id); return b&&b.ch===t.ch;});
+    const k=S.draw.findIndex(id=>id===t.id);
     if(k>=0){ S.draw.splice(k,1); gone++; }
   }
   return gone;
@@ -58,13 +119,27 @@ function pathFeedback(id){
   if(lv>0) setTimeout(()=>toast(`<b style="color:${p.c}">${p.n}</b> الآن م${lv}`),550);
 }
 
+/* The bag is four roots (three radical cards each) plus whatever زوائد you have collected.
+   Twelve cards you can name — that is the point: you are not fishing in an alphabet. */
+const bagFromRoots=(roots,aff)=>{
+  const out=[];
+  for(const r of roots) for(const ch of r) out.push({id:uid++,k:'r',ch,root:r,ench:null});
+  for(const a of aff) out.push({id:uid++,k:'a',a,ench:null});
+  return out;
+};
 function newRun(starter){
   const st=CHARS.find(x=>x.id===starter)||CHARS[0];
-  const nb=[{root:st.root,lvl:1,xp:0}];
-  if(st.nb>1) nb.push({root:'علم',lvl:1,xp:0});
-  S={phase:'intro',round:1,gold:st.gold,bag:[...st.letters].map(ch=>({id:uid++,ch,ench:null})),relics:[],tools:{},
-     charId:st.id,rowMods:[null,null,null,null],notebook:nb,patLv:{},permMult:0,seenRoots:{},seenPatterns:{},
-     burnsMax:BURNS,dropsMax:DROPS,stats:{words:0,best:null,total:0,maxChain:0},mute:S?S.mute:false,starter:st.n};
+  const roots=[...st.roots];
+  S={phase:'intro',round:1,gold:st.gold,roots,bag:bagFromRoots(roots,st.aff||[]),relics:[],tools:{},
+     /* All four of your roots start in the notebook. Twelve radical cards throw up plenty of
+     ACCIDENTAL roots — خ+ت+م from three different roots is a real word — and that is a nice
+     discovery, but if an accident paid the same as your own root the four roots would be
+     decoration. The notebook is what makes them yours: chips, multiplier, and they level. */
+     charId:st.id,rowMods:[null,null,null,null],notebook:roots.map(r=>({root:r,lvl:1,xp:0})),patLv:{},permMult:0,
+     seenRoots:{},seenPatterns:{},burnsMax:BURNS,dropsMax:DROPS,
+     stats:{words:0,best:null,total:0,maxChain:0},mute:S?S.mute:false,starter:st.n};
+  if(isChar('rahhal')){ const extra=fertileRoots(60).find(r=>!roots.includes(r));
+    if(extra){ roots.push(extra); S.bag=bagFromRoots(roots,st.aff||[]); S.notebook.push({root:extra,lvl:1,xp:0}); } }
   comboSeen=new Set(); comboCheck();
   startRound();
 }
@@ -74,19 +149,18 @@ function startRound(){
     lines:[[],[],[],[]],junk:[false,false,false,false],lock:[0,0,0,0],fixed:[0,0,0,0],chain:0,sealedSinceDrop:true,
     rootCounts:{},roundRoots:{},lastEnd:null,ash:0,dropCount:0,log:[],top:[],held:null,freeSeal:isChar('warraq'),
     draw:[],seals:sealsFor(),boss:null,wazn:pick(PATTERNS.filter(p=>p.id!=='thulathi')).id,phase:'intro',shop:null,picker:null,nbOffer:null});
-  S.draw=freshPile(); S.drops=S.draw.length;
+  if(BOSS_ROUNDS.includes(r)){
+    const pool=r===3?['blind','termite','dry']:r===6?['rhyme','barren','rush']:Object.keys(BOSSES);
+    S.boss={id:pick(pool)};
+  }
+  S.draw=freshPile(); S.drops=S.draw.length;   // after the boss: القحط changes what the pile holds
   S.charges={}; for(const k of Object.keys(S.tools)) S.charges[k]=TOOLS[k].ch;   // tools recharge every round
   S.burns=BURNS+(has('ghirbal')?2:0); S.burnsMax=S.burns;
   /* القُرْعة: open on your best letter instead of whatever the shuffle gave you. */
   if(has('qura')&&S.draw.length){
     let bi=-1,bv=-1;
-    for(let k=0;k<S.draw.length;k++){const t=S.bag.find(b=>b.id===S.draw[k]); const v=t?(VAL[t.ch]||0):0; if(v>bv){bv=v;bi=k;}}
-    if(bi>=0) S.top.push({...S.bag.find(b=>b.id===S.draw[bi])}), S.draw.splice(bi,1);
-  }
-  if(BOSS_ROUNDS.includes(r)){
-    const pool=r===3?['blind','termite','dry']:r===6?['rhyme','weight','rush']:Object.keys(BOSSES);
-    S.boss={id:pick(pool)};
-    if(S.boss.id==='weight') for(let i=0;i<nLines();i++){ S.lines[i]=[{id:null,ch:pick([...'ثظغضذخص']),ench:null,heavy:true}]; }
+    for(let k=0;k<S.draw.length;k++){const c=S.bag.find(b=>b.id===S.draw[k]); const v=c?cardVal(c):0; if(v>bv){bv=v;bi=k;}}
+    if(bi>=0){ S.top.push({...S.bag.find(b=>b.id===S.draw[bi])}); S.draw.splice(bi,1); }
   }
   S.cur=drawTile(); S.next=drawTile();
 }
@@ -98,127 +172,120 @@ function drawTile(){
   }
   return null;
 }
-const lineStr=i=>S.lines[i].map(t=>t.ch).join('');
-/* The relics that rewrite acceptance. A word game's one lever a card game does not have:
-   القَلْب lets a row count if its mirror is a word, الشّاذّ lets a two-letter row count. */
-const rev=w=>[...w].reverse().join('');
-const wordOK=w=>isWord(w)||(has('qalb')&&w.length>=3&&isWord(rev(w)))||(has('shadh')&&w.length===2&&isWord(w));
-function placed(i,tile,atStart){
+const lineStr=i=>asmLine(S.lines[i]);
+const wordOK=w=>isWord(w);
+
+/* Where the incoming card would go. A radical always appends (or prepends, with the start
+   zone); an affix takes its printed seat unless المُلحَق frees it. */
+function placed(i,card,atStart){
   const L=S.lines[i];
-  const put=ch=>atStart?[{...tile,ch},...L]:[...L,{...tile,ch}];
-  if(tile.ench==='ink'){
-    const fam=famOf(tile.ch)||[tile.ch]; let best=fam[0],bs=-1;
-    for(const c of fam){const s=put(c).map(t=>t.ch).join(''); const sc=isWord(s)?2:isAlive(s)?1:0; if(sc>bs){bs=sc;best=c;}}
-    return put(best);
-  }
-  return put(tile.ch);
+  if(isRad(card)) return atStart?[{...card},...L]:[...L,{...card}];
+  return [...L,{...card,seat:atStart?0:null}];
 }
-/* المَدّ — ا و ي are one family in Arabic morphology (حروف العلّة), so let the relic
-   treat them as interchangeable rather than inventing a wildcard. */
-const VOWELS=['ا','و','ي'];
-function bestVowel(i,tile,atStart){
-  if(!has('madd')||!VOWELS.includes(tile.ch)) return null;
-  for(const c of VOWELS){
-    if(c===tile.ch) continue;
-    const w=placed(i,{...tile,ch:c},atStart).map(t=>t.ch).join('');
-    if(wordOK(w)) return c;
-  }
-  for(const c of VOWELS){
-    if(c===tile.ch) continue;
-    const w=placed(i,{...tile,ch:c},atStart).map(t=>t.ch).join('');
-    if(isAlive(w)) return c;
-  }
-  return null;
-}
-function stateOf(i,tile,atStart){
-  if(S.junk[i]) return 'junk';
-  if(S.lock[i]>0) return 'locked';
-  if(S.lines[i].length>=lineMax(i)) return 'full';
-  const s=placed(i,tile,atStart).map(t=>t.ch).join('');
-  if(wordOK(s)) return 'word';
-  if(isAlive(s)||(has('qalb')&&isAlive(rev(s)))) return 'alive';
-  const v=bestVowel(i,tile,atStart);
-  if(v){ const w=placed(i,{...tile,ch:v},atStart).map(t=>t.ch).join(''); return wordOK(w)?'word':'alive'; }
-  return 'dead';
-}
-function hintFor(i,tile,atStart){
-  if(!tile) return null;
-  const st=stateOf(i,tile,atStart);
-  if(st!=='dead') return st;
-  if(S.rowMods[i]==='fort') return 'bounce';
-  if(has('tufayli') && parasiteTarget(i,tile)!=null) return 'jump';
-  return has('qalam')?'junk':'dead';
-}
-function parasiteTarget(i,tile){
-  const n=nLines();
-  for(let k=1;k<n;k++){const j=(i+k)%n; const st=stateOf(j,tile,false); if(st==='word'||st==='alive') return j;}
-  return null;
-}
-const waznOf=id=>PATTERNS.find(p=>p.id===id);
-/* Which still-undrawn letter would finish this row on the round's commissioned wazn.
-   Recall becomes perception: the board remembers the pattern so the player doesn't. */
+
+const waznOf=id=>PATTERNS.find(p=>p.id===id)||PATTERNS[0];
+/* Which undrawn card would finish this row on the round's commissioned wazn. Recall becomes
+   perception: the board remembers the pattern so the player does not have to. */
 function waznHint(i){
-  if(!S.wazn||S.junk[i]||S.lock[i]>0||!S.lines[i].length||S.lines[i].length>=lineMax(i)) return null;
-  const s=lineStr(i), seen=new Set();
+  if(!S.wazn||S.junk[i]||S.lock[i]>0||!S.lines[i].length) return null;
+  const seen=new Set();
   for(const id of S.draw){
-    const t=S.bag.find(b=>b.id===id);
-    if(!t||seen.has(t.ch)) continue;
-    seen.add(t.ch);
-    const w=s+t.ch, p=isWord(w)?patOf(w):null;
-    if(p&&p.id===S.wazn) return t.ch;
+    const c=S.bag.find(b=>b.id===id);
+    if(!c||seen.has(c.id)) continue;
+    const key=c.k==='r'?'r'+c.ch:'a'+c.a;
+    if(seen.has(key)) continue;
+    seen.add(key);
+    if(isRad(c)&&nRad(S.lines[i])>=RADMAX()) continue;
+    const L2=placed(i,c,false);
+    if(nRad(L2)<3||!rootFound(L2)) continue;
+    const w=asmLine(L2);
+    if(isWord(w)&&patOf(w)&&patOf(w).id===S.wazn) return cardTxt(c);
   }
   return null;
 }
 
-/* ================= SCORING ================= */
+/* ================= ROW STATE =================
+   A row seals when it holds a full root (three أصول, four with الرِّحاب) and the assembled
+   word is real. It stays alive while its radicals can still reach a root. It refuses a
+   radical once the root is full — but it still takes زوائد, which is the whole shape of the
+   decision: the root closes, the word does not. */
+function stateOf(i,card,atStart){
+  if(S.junk[i]) return 'junk';
+  if(S.lock[i]>0) return 'locked';
+  if(!card) return 'alive';
+  if(isRad(card)&&nRad(S.lines[i])>=RADMAX()) return 'full';
+  if(!isRad(card)&&!seatFree(S.lines[i],card,atStart?0:null)) return 'seat';
+  const L2=placed(i,card,atStart);
+  if(nRad(L2)>=3&&rootFound(L2)&&isWord(asmLine(L2))) return 'word';
+  if(!radAlive(L2)) return 'dead';
+  return 'alive';
+}
+function hintFor(i,card,atStart){
+  if(!card) return null;
+  const st=stateOf(i,card,atStart);
+  if(st!=='dead') return st;
+  if(S.rowMods[i]==='fort') return 'bounce';
+  return has('qalam')?'junk':'dead';
+}
+
+/* ================= SCORING =================
+   Chips come from the cards; the multiplier comes from what you BUILT — the root you found
+   and the زوائد you hung on it. That is the whole thesis: a bare root is a small sure thing,
+   and every affix is a bet that lengthens the word and shortens your pile. */
 function scoreWord(tiles,s,row){
-  /* القَلْب accepts a row whose mirror is the word — so score the reading that IS a word,
-     or rootOf/patOf run on the meaningless direction and the relic quietly pays nothing. */
-  if(has('qalb')&&!isWord(s)&&isWord(rev(s))){ s=rev(s); tiles=[...tiles].reverse(); }
-  const len=s.length, tags=[]; let chips=0, x=1;
-  for(let k=0;k<tiles.length;k++){
-    const t=tiles[k]; let v=VAL[t.ch]||1;
-    if(t.ench==='gold') v*=3;
-    /* المُشَدِّد — the شدّة is a real thing in Arabic: a doubled letter is one sound held twice. */
-    if(has('shadd')&&k>0&&tiles[k-1].ch===t.ch) v*=4;
-    if(t.ench==='seed'&&!ZAWAID.has(t.ch)) v*=2;
+  const tags=[]; let chips=0, x=1;
+  const rad=tiles.filter(isRad), aff=tiles.filter(c=>c.k==='a');
+  const naff=aff.length, mod=S.rowMods[row];
+  for(const c of tiles){
+    let v=cardVal(c);
+    if(mod==='usul'&&isRad(c)) v*=2;
     chips+=v;
   }
-  /* مُثْقَل counts twice toward length, which is how a short bag still reaches a long وزن. */
-  const wlen=len+tiles.filter(t=>t.ench==='heavy').length+(has('taarif')&&!hasAl(s)?1:0);
-  chips+=LENB[Math.min(wlen,8)];
+  const len=s.length;
+  chips+=LENB[Math.min(len,8)];
   if(S.ash){ chips+=S.ash; tags.push('رماد +'+S.ash); }
-  let mult=1+Math.max(0,wlen-3);
+
+  let mult=1+Math.max(0,len-3);
+  /* every زيادة is worth its own printed multiplier — this is where a long word pays */
+  if(naff){
+    let am=0; for(const c of aff) am+=afOf(c).m+(has('mushtaqq')?1:0)+(mod==='ziyada'?2:0);
+    mult+=am; tags.push(`${naff} زيادة +${fmt(am)}`);
+  }
+  if(has('sarfi')&&naff>=3){ x*=3; tags.push('الصَّرْفي ×٣'); }
+
   const p=patOf(s);
   if(p){ const lv=S.patLv[p.id]||1, com=p.id===S.wazn;
-    const commission=com?(S.rowMods[row]==='mizan'?3:isChar('nahwi')?3:2):1;
+    const commission=com?(mod==='mizan'?3:2):1;
     const k=(has('wazzan')?2:1)*commission;
     chips+=Math.round(p.c*(1+.5*(lv-1)))*k; mult+=(p.m+lv-1)*k; tags.push('وزن '+p.n+(lv>1?' م'+lv:''));
     if(com) tags.push('طلب الجولة ×'+commission); }
-  if(hasAl(s)||has('taarif')){ mult+=1; tags.push(hasAl(s)?'ال +١':'أل التعريف +١'); }
-  const root=rootOf(s); let nb=nbOf(root);
+  if(hasAl(s)){ mult+=1; tags.push('ال +١'); }
+
+  /* the root is what the three أصول actually spell, not what the lexicon guesses */
+  const root=rootFound(tiles)||rootOf(s);
+  let nb=nbOf(root);
   if(!nb&&has('ablind')&&root){ nb={root,lvl:1,xp:0,blind:true}; tags.push('جذر أعمى'); }
   if(nb){ chips+=5*nb.lvl; mult+=nb.lvl; if(!nb.blind) tags.push('دفتر '+spaced(root)+' م'+nb.lvl); }
-  let add=S.permMult;
-    if(add>0){ mult+=add; tags.push('دائم +'+fmt(add)); }
+  if(tiles.some(c=>c.ench==='seed'&&isRad(c))){ mult+=1; tags.push('بَذْرة +١'); }
+
+  if(S.permMult>0){ mult+=S.permMult; tags.push('دائم +'+fmt(S.permMult)); }
   if(root){const prev=S.rootCounts[root]||0; if(prev>0){x*=(1+prev); tags.push('رنين ×'+(1+prev));}}
   if(has('ishtiqaq')&&root&&S.roundRoots[root]){ x*=2; tags.push('اشتقاق ×٢'); }
-  if(isChar('badawi')){ x*=1.5; tags.push('بَدَوي ×١٫٥'); }
-  const bagFlavor=tiles.some(t=>t.ench)||S.bag.length<=7, pctx={nb,p,chain:S.chain,bagFlavor};
+  if(isChar('hakim')&&len>=5){ x*=2; tags.push('الحكيم ×٢'); }
+
+  const bagFlavor=tiles.some(c=>c.ench)||S.roots.length<=3, pctx={nb,p,naff,chain:S.chain,bagFlavor};
   for(const path of PATHS){
     const lv=pathLvl(path.progress(S,has));
     if(lv>0&&path.match(pctx)){ const b=.15*lv; x*=1+b; tags.push('مسار '+path.n+' م'+lv+' +'+Math.round(b*100)+'٪'); }
   }
   if(S.chain>0){const m=1+.5*S.chain; x*=m; tags.push('سلسلة ×'+fmt(m));}
-  const glass=tiles.filter(t=>t.ench==='glass').length; if(glass){x*=2**glass; tags.push('زجاج ×'+(2**glass));}
-  const mod=S.rowMods[row];
+  const glass=tiles.filter(c=>c.ench==='glass').length; if(glass){x*=2**glass; tags.push('زجاج ×'+(2**glass));}
   if(mod==='double'){x*=2;tags.push('سطر مضاعف ×٢');}
-  if(mod==='short'&&len<=3){x*=4;tags.push('قِصار ×٤');}
   if(mod==='manbat'&&nb&&!nb.blind){x*=3;tags.push('مَنْبَت ×٣');}
-  if(mod==='long'&&len>=5){x*=3;tags.push('طِوال ×٣');}
-  if(has('yatim')&&S.bag.length<=7){x*=3;tags.push('يتيم ×٣');}
+  if(mod==='tawil'&&len>=6){x*=3;tags.push('طِوال ×٣');}
+  if(has('yatim')&&S.roots.length<=3){x*=3;tags.push('يتيم ×٣');}
   if(S.boss&&S.boss.id==='rhyme'&&S.lastEnd&&s[0]!==S.lastEnd){x*=.5;tags.push('بلا قافية ×½');}
-  return {chips,mult:mult*x,score:Math.round(chips*mult*x),tags,root,pat:p?p.id:null};
+  return {chips,mult:mult*x,score:Math.round(chips*mult*x),tags,root,pat:p?p.id:null,naff};
 }
 const fmt=n=>(+(+n).toFixed(2)).toString();
 
@@ -231,8 +298,8 @@ function canAct(){
   if(S.burns>0) return true;
   for(let i=0;i<nLines();i++){
     if(S.junk[i]) return true;                                  // junk takes the drop, and wipes for scrap
-    if(S.lock[i]<=0&&S.lines[i].length<lineMax(i)) return true;  // row still accepts a letter
-    if(S.seals>0&&S.lines[i].length>=2&&wordOK(lineStr(i))) return true;
+    if(S.lock[i]<=0&&(isRad(S.cur)?nRad(S.lines[i])<RADMAX():seatFree(S.lines[i],S.cur,null))) return true;
+    if(S.seals>0&&nRad(S.lines[i])>=3&&rootFound(S.lines[i])&&isWord(lineStr(i))) return true;
   }
   return false;
 }
@@ -240,29 +307,28 @@ function drop(i,atStart){
   if(S.phase!=='play'||i>=nLines()) return;
   if(S.aim&&aimTool(i)) return;
   if(S.lock[i]>0){ toast('هذا السطر جافّ الآن'); return; }
-  if(!S.junk[i]&&S.lines[i].length>=lineMax(i)){ toast('هذا السطر ممتلئ، اختمه أولًا'); return; }
-  const tile=S.cur; audio('drop');
+  const card=S.cur;
+  /* The root closes; the word does not. A full root refuses another أصل but still takes زوائد —
+     that asymmetry is the whole shape of the decision. */
+  if(!S.junk[i]&&isRad(card)&&nRad(S.lines[i])>=RADMAX()){ toast('اكتمل جذر هذا السطر — لا يقبل إلا زيادة'); return; }
+  if(!S.junk[i]&&!isRad(card)&&!seatFree(S.lines[i],card,atStart?0:null)){ toast(`مقعد «${SEATS[seatOf(card,atStart?0:null)]}» مشغول في هذا السطر`); return; }
+  audio('drop');
   if(!S.sealedSinceDrop) S.chain=0;
   S.sealedSinceDrop=false;
-  if(S.junk[i]){ if(S.lines[i].length<lineMax(i)) S.lines[i]=[...S.lines[i],tile]; }
+  if(S.junk[i]){ S.lines[i]=[...S.lines[i],card]; }
   else {
-    const st=stateOf(i,tile,atStart);
-    if(st==='word'||st==='alive'){
-      let t2=tile;
-      if(has('madd')){ const base=placed(i,tile,atStart).map(x=>x.ch).join('');
-        if(!wordOK(base)&&!isAlive(base)){ const v=bestVowel(i,tile,atStart); if(v) t2={...tile,ch:v}; } }
-      S.lines[i]=placed(i,t2,atStart); fx={line:i,kind:'drop'};
-    }
-    else if(S.rowMods[i]==='fort'||S.lines[i].some(t=>t.ench==='anchor')){ fx={line:i,kind:'crack'}; floatAt(i,{bad:true,text:'ارتدّ الحرف'}); }
-    else if(has('tufayli') && parasiteTarget(i,tile)!=null){ const j=parasiteTarget(i,tile); S.lines[j]=placed(j,tile,false); fx={line:j,kind:'drop'}; floatAt(j,{bad:true,text:'قفز الطفيلي'}); }
-    else if(has('qalam')){ S.lines[i]=[...S.lines[i],tile]; S.junk[i]=true; fx={line:i,kind:'crack'}; audio('crack');
+    const st=stateOf(i,card,atStart);
+    if(st==='word'||st==='alive'){ S.lines[i]=placed(i,card,atStart); fx={line:i,kind:'drop'}; }
+    else if(S.rowMods[i]==='fort'||S.lines[i].some(t=>t.ench==='anchor')){ fx={line:i,kind:'crack'}; floatAt(i,{bad:true,text:'ارتدّت البطاقة'}); }
+    else if(has('tufayli') && parasiteTarget(i,card)!=null){ const j=parasiteTarget(i,card); S.lines[j]=placed(j,card,false); fx={line:j,kind:'drop'}; floatAt(j,{bad:true,text:'قفز الطفيلي'}); }
+    else if(has('qalam')){ S.lines[i]=[...S.lines[i],card]; S.junk[i]=true; fx={line:i,kind:'crack'}; audio('crack');
       floatAt(i,{bad:true,text:'صار حشوًا'+rowLost(i,0)}); }
     else crack(i);
   }
   S.drops=Math.max(0,S.draw.length+(S.next?1:0)+(S.cur?1:0)-1); S.dropCount++;
   for(let k=0;k<4;k++) if(S.lock[k]>0) S.lock[k]--;
   if(S.boss&&S.boss.id==='termite'&&S.dropCount%6===0) termite();
-  advance(tile);
+  advance(card);
   if(!S.cur||S.seals<=0) endOfDrops(); else render();
 }
 function termite(){
@@ -281,7 +347,7 @@ function rowLost(i,scrap){
   return '، الرحى +٠٫٥'+(scrap?` ونشارة +${scrap}`:'');
 }
 function crack(i){
-  const scrap=S.lines[i].reduce((a,t)=>a+(VAL[t.ch]||1),0);
+  const scrap=S.lines[i].reduce((a,c)=>a+cardVal(c),0);
   S.score+=scrap;
   S.lines[i]=[]; S.chain=0; fx={line:i,kind:'crack'}; audio('crack');
   floatAt(i,{bad:true,text:'انكسر السطر'+rowLost(i,scrap)});
@@ -308,7 +374,7 @@ function twinSwap(){ if(S.phase!=='play'||!has('tawam')||has('rabi')) return; [S
    round, so a tool is a budget you manage inside the round rather than a permanent edge.
    Some act on the letter in your hand, some act on a row — `needsRow` says which, and
    the row-takers arm a target picker instead of firing immediately. */
-const ROW_TOOLS={shave:1,flip:1,wipe:1};
+const ROW_TOOLS={shave:1,flip:1,wipe:1,unhook:1};
 function useTool(id){
   if(S.phase!=='play'||!hasTool(id)) return;
   if((S.charges[id]||0)<=0){ toast('لا شحنة في '+TOOLS[id].n); return; }
@@ -316,12 +382,12 @@ function useTool(id){
   if(ROW_TOOLS[use]){ S.aim=S.aim===id?null:id; render(); return; }   // pick a row next
   if(!S.cur) return;
   if(use==='fam'){
-    const f=famOf(S.cur.ch);
-    if(!f||S.cur.ench==='ink'){ toast('هذا الحرف بلا عائلة نقاط'); return; }
+    const f=isRad(S.cur)?famOf(S.cur.ch):null;
+    if(!isRad(S.cur)||!f){ toast('النقطة للأصول ذات عائلة النقط فقط'); return; }
     S.cur={...S.cur,ch:f[(f.indexOf(S.cur.ch)+1)%f.length]};
   }
   else if(use==='hamza'){ if(S.cur.ch==='ء'){ toast('هو همزة بالفعل'); return; } S.cur={...S.cur,ch:'ء'}; }
-  else if(use==='vowel'){ const i=VOWELS.indexOf(S.cur.ch); S.cur={...S.cur,ch:VOWELS[(i+1)%3]}; }
+  else if(use==='vowel'){ if(!isRad(S.cur)){toast('المدّة للأصول فقط');return;} const V=['ا','و','ي']; const i=V.indexOf(S.cur.ch); S.cur={...S.cur,ch:V[(i+1)%3]}; }
   else if(use==='redraw'){ const t=drawTile(); if(!t){ toast('الكومة فارغة'); return; } S.draw.unshift(S.cur.id); S.cur=t; }
   else if(use==='hold'){
     if(S.held){ const h=S.held; S.held=S.cur; S.cur=h; }
@@ -334,23 +400,33 @@ function aimTool(i){
   const id=S.aim; if(!id) return false;
   const use=TOOLS[id].use, L=S.lines[i];
   if(use==='shave'){ if(!L.length){ toast('السطر فارغ'); return true; } S.lines[i]=L.slice(0,-1); }
-  else if(use==='flip'){ if(L.length<2){ toast('لا شيء يُقلب'); return true; } S.lines[i]=[...L].reverse(); }
+  else if(use==='flip'){
+    const rad=L.filter(isRad); if(rad.length<2){ toast('لا أصول تُقلب'); return true; }
+    const rev=[...rad].reverse(); let k=0;
+    S.lines[i]=L.map(c=>isRad(c)?rev[k++]:c);
+  }
+  else if(use==='unhook'){
+    const k=[...L].reverse().findIndex(c=>c.k==='a');
+    if(k<0){ toast('لا زيادة في هذا السطر'); return true; }
+    const at=L.length-1-k; const c=L[at];
+    S.lines[i]=[...L.slice(0,at),...L.slice(at+1)]; S.draw.push(c.id);
+  }
   else if(use==='wipe'){ if(!L.length){ toast('السطر فارغ'); return true; } S.lines[i]=[]; S.junk[i]=false; }
   S.charges[id]--; S.aim=null; audio('seal',0); render(); return true;
 }
 function seal(i,auto){
   if(S.phase!=='play') return;
   const tiles=S.lines[i]; if(!tiles.length) return;
-  const s=tiles.map(t=>t.ch).join('');
+  const s=asmLine(tiles);
   /* Wiping junk is scrap, not a word — it costs no seal. The guard used to sit above this,
      so once your five seals were gone the «امسح» button still rendered but did nothing. */
   if(S.junk[i]){
-    const sc=3*s.length; S.score+=sc; S.lines[i]=[]; S.junk[i]=false; fx={line:i,kind:'sealed'};
-    floatAt(i,{score:sc,eq:'حشو: ٣ × '+s.length,tags:[]}); audio('seal',0);
+    const sc=3*tiles.length; S.score+=sc; S.lines[i]=[]; S.junk[i]=false; fx={line:i,kind:'sealed'};
+    floatAt(i,{score:sc,eq:'حشو: ٣ × '+tiles.length,tags:[]}); audio('seal',0);
     return afterSeal(auto);
   }
   if(S.seals<=0){ toast('لم يبق لك ختم في هذه الجولة'); return; }
-  if(!wordOK(s)) return;
+  if(nRad(tiles)<3||!rootFound(tiles)||!isWord(s)) return;
   const r=scoreWord(tiles,s,i);
   S.score+=r.score; S.stats.words++; S.stats.total+=r.score;
   if(!S.stats.best||r.score>S.stats.best.score) S.stats.best={w:displayOf(s),score:r.score};
@@ -362,9 +438,9 @@ function seal(i,auto){
   if(has('jami')&&r.pat&&!S.seenPatterns[r.pat]){ S.seenPatterns[r.pat]=1; S.permMult+=.5; setTimeout(()=>toast('جامع الأوزان: أول كلمة على وزن جديد · +٠٫٥ مضاعف دائم'),650); }
   S.chain++; S.stats.maxChain=Math.max(S.stats.maxChain||0,S.chain); S.sealedSinceDrop=true; S.lastEnd=s[s.length-1];
   if(S.rowMods[i]==='gold') S.gold+=3;
+  if(isChar('tajir')&&r.naff){ S.gold+=r.naff; floatAt(i,{good:true,text:`التاجر +${r.naff} دينار`}); }
   tiles.filter(t=>t.ench==='glass'&&t.id).forEach(t=>{S.bag=S.bag.filter(b=>b.id!==t.id);});
-  if(has('nasikh')&&S.bag.length<bagCap()){ const best=tiles.filter(t=>!t.heavy).reduce((a,b)=>(VAL[b.ch]||0)>(VAL[a.ch]||0)?b:a); S.bag.push({id:uid++,ch:best.ch,ench:null}); }
-  const gone=spendLetters(tiles);
+  const gone=spendCards(tiles);
   /* Three ways a seal can come back: the copyist's first one is free, المِداد refunds a
      word that answered the round's commission, and the money-changer buys more. */
   if(S.freeSeal){ S.freeSeal=false; floatAt(i,{good:true,text:'ختم الوَرّاق: مجّانًا'}); }
@@ -428,7 +504,8 @@ function genOffers(){
   shuffle(matched); shuffle(other);
   const relicPool=front(lead?[...matched,...other]:shuffle(pool),'relic');
   const o:any[]=relicPool.slice(0,2).map(r=>({k:'relic',id:r,cost:6,path:RELICS[r].path}));
-  o.push({k:'letters',cost:3,opts:letterOpts()});
+  o.push({k:'affix',id:front(AFFIX_IDS,'affix')[0],cost:4});
+  if(has('khamis')&&S.roots.length<6) o.push({k:'root',id:pick(fertileRoots(60).filter(r=>!S.roots.includes(r)).slice(0,40)),cost:7});
   const rid=front(Object.keys(ROWMODS),'row')[0];
   o.push({k:'row',id:rid,cost:4,path:ROWMODS[rid].path});
   const wantNb=lead==='root'||(lead!=='pattern'&&Math.random()<.5&&S.notebook.length);
@@ -440,19 +517,15 @@ function genOffers(){
   if(tpool.length) o.push({k:'tool',id:tpool[0],cost:5});
   return o;
 }
-function letterOpts(){
-  const nbL=[...nbLetters()]; const pool=shuffle([...LETTERS]);
-  const out=new Set(); if(nbL.length) out.add(pick(nbL));
-  for(const c of pool){ if(out.size>=3) break; out.add(c); }
-  return [...out];
-}
+
 function buy(idx){
   const o=S.shop.offers[idx]; if(!o||o.sold||S.gold<o.cost) return;
   if(o.k==='relic'){ if(S.relics.length>=5){toast('معك ٥ طلاسم، وهذا الحد');return;} S.relics.push(o.id); pay(o); pathFeedback(o.path); }
   else if(o.k==='nbup'){ const nb=nbOf(o.root); if(nb) nb.lvl++; pay(o); pathFeedback('root'); }
   else if(o.k==='patup'){ S.patLv[o.id]=(S.patLv[o.id]||1)+1; pay(o); pathFeedback('pattern'); }
   else if(o.k==='ench') S.picker={mode:'ench',ench:o.id,idx};
-  else if(o.k==='letters'){ if(S.bag.length>=bagCap()){toast('كيسك ممتلئ');return;} S.picker={mode:'letters',idx}; }
+  else if(o.k==='affix'){ S.bag.push({id:uid++,k:'a',a:o.id,ench:null}); pay(o); pathFeedback('pattern'); toast(`<b>${AFFIX[o.id].n}</b> — ${AFFIX[o.id].d}`); }
+  else if(o.k==='root'){ S.roots.push(o.id); for(const ch of o.id) S.bag.push({id:uid++,k:'r',ch,root:o.id,ench:null}); if(S.notebook.length<nbSlots()) S.notebook.push({root:o.id,lvl:1,xp:0}); pay(o); pathFeedback('root'); toast(`دخل الجذر <b>${spaced(o.id)}</b> كيسك`); }
   else if(o.k==='row') S.picker={mode:'row',mod:o.id,idx};
   else if(o.k==='tool'){ S.tools[o.id]=1; S.charges[o.id]=TOOLS[o.id].ch; pay(o); toast(`<b>${TOOLS[o.id].n}</b> — ${TOOLS[o.id].d}`); }
   audio('drop'); comboCheck(); render();
@@ -470,16 +543,11 @@ function comboCheck(){
 function pickTile(id){
   const p=S.picker; const o=p.idx!=null?S.shop.offers[p.idx]:null;
   const t=S.bag.find(b=>b.id===id); if(!t) return;
-  if(p.mode==='ench'){ if(p.ench==='ink'&&!famOf(t.ch)){toast('الحبر يحتاج حرفًا له عائلة نقاط');return;} t.ench=p.ench; pay(o); pathFeedback('bag'); }
-  else if(p.mode==='remove'){ if(S.bag.length<=4){toast('لا يقل الكيس عن ٤ حروف');return;} S.bag=S.bag.filter(b=>b.id!==id); S.gold-=2; S.shop.removed=true; }
-  else if(p.mode==='replace'){ t.ch=p.ch; t.ench=null; pay(o); }
+  if(p.mode==='ench'){ t.ench=p.ench; pay(o); pathFeedback('bag'); }
+  else if(p.mode==='remove'){ if(S.bag.length<=6){toast('لا يقل كيسك عن ٦ بطاقات');return;} S.bag=S.bag.filter(b=>b.id!==id); S.gold-=2; S.shop.removed=true; }
   S.picker=null; audio('seal',1); comboCheck(); render();
 }
-function pickLetter(ch){
-  const o=S.shop.offers[S.picker.idx];
-  if(S.bag.length>=bagCap()){ S.picker={mode:'replace',ch,idx:S.picker.idx}; render(); return; }
-  S.bag.push({id:uid++,ch,ench:null}); pay(o); S.picker=null; audio('seal',1); render();
-}
+
 function pickRow(r){ const o=S.shop.offers[S.picker.idx]; S.rowMods[r]=S.picker.mod; pay(o); S.picker=null; audio('seal',1); pathFeedback(o.path); comboCheck(); render(); }
 function reroll(){ if(S.gold<S.shop.reroll) return; S.gold-=S.shop.reroll; S.shop.reroll++; S.shop.offers=genOffers(); render(); }
 function nextRound(){ S.round++; startRound(); render(); }
@@ -496,13 +564,17 @@ function tick(){
 
 /* ================= RENDER ================= */
 const app=document.getElementById('app'), ovl=document.getElementById('ovl');
-function tileHTML(t,cls=''){
-  if(!t) return `<div class="tile ${cls} hidden">؟</div>`;
-  const nbd=S&&S.notebook&&nbLetters().has(t.ch)?'<span class="nbdot"></span>':'';
-  const zd=ZAWAID.has(t.ch)?' zaid':'';
-  return `<div class="tile ${cls}${zd} ${t.ench?'e-'+t.ench:''}">${t.ch}<span class="val">${VAL[t.ch]||1}</span>${nbd}</div>`;
+function tileHTML(c,cls=''){
+  if(!c) return `<div class="tile ${cls} hidden">؟</div>`;
+  if(c.k==='a'){
+    const a=afOf(c);
+    return `<div class="tile card-aff ${cls} ${c.ench?'e-'+c.ench:''}" title="${a.n}">${a.t}<span class="seat">${SEATS[a.s]}</span><span class="val">${cardVal(c)}</span></div>`;
+  }
+  const mine=S&&S.roots&&S.roots.includes(c.root)?' own':'';
+  const nbd=S&&S.notebook&&nbOf(c.root)?'<span class="nbdot"></span>':'';
+  return `<div class="tile card-rad${mine} ${cls} ${c.ench?'e-'+c.ench:''}">${c.ch}<span class="val">${cardVal(c)}</span>${nbd}</div>`;
 }
-const HINTLAB={word:'تكتمل هنا',alive:'تبقى حيّة',dead:'ستنكسر',full:'ممتلئ',junk:'حشو',locked:'جافّ',bounce:'سيرتد',jump:'سيقفز'};
+const HINTLAB={word:'كلمة تامّة',alive:'الجذر حيّ',dead:'لا جذر بعدها',full:'اكتمل الجذر',seat:'المقعد مشغول',junk:'حشو',locked:'جافّ',bounce:'سيرتد',jump:'سيقفز'};
 function render(){
   if(!S) return;
   if(S.phase==='play'&&S.cur&&!canAct()){ endOfDrops(); return; }
@@ -520,26 +592,30 @@ function render(){
   <div class="commission">طلب هذه الجولة <b>${waznOf(S.wazn).n}</b><span>يدفع ضعفين</span></div>
   <div class="lines">`;
   for(let i=0;i<n;i++){
-    const L=S.lines[i], s=L.map(t=>t.ch).join(''), junk=S.junk[i];
+    const L=S.lines[i], s=asmLine(L), junk=S.junk[i];
     const hint=S.phase==='play'?hintFor(i,S.cur,false):null;
-    const ok=!junk&&wordOK(s);
+    const ok=!junk&&nRad(L)>=3&&!!rootFound(L)&&isWord(s);
     const fxc=fx.line===i?(fx.kind==='crack'?'cracked':fx.kind==='sealed'?'sealed':''):'';
     let rootl='';
     if(ok){ const r=rootOf(s), p=patOf(s), nb=nbOf(r), c=r?S.rootCounts[r]||0:0;
       const bits=[]; if(r) bits.push(`<span class="${nb?'nbk':''}">${spaced(r)}${nb?' من الدفتر':''}</span>`); if(c) bits.push(`رنين <b>×${c+1}</b>`); if(p) bits.push('وزن '+p.n);
       rootl=bits.length?`<div class="rootlab">${bits.map(b=>`<span>${b}</span>`).join('')}</div>`:''; }
     let sealBtn='';
-    if(ok&&s.length>=2&&S.seals>0){const p=scoreWord(L,s,i); sealBtn=`<button class="seal" data-seal="${i}">ختم<small>+${p.score}</small><small class="cost">−${s.length} حرف</small></button>`;}
+    if(ok&&S.seals>0){const p=scoreWord(L,s,i); sealBtn=`<button class="seal" data-seal="${i}">ختم<small>+${p.score}</small><small class="cost">−${L.length} بطاقة</small></button>`;}
     else if(junk&&L.length) sealBtn=`<button class="seal junkseal" data-seal="${i}">امسح<small>+${3*s.length}</small></button>`;
     const mod=S.rowMods[i];
     const startHint=S.phase==='play'&&!junk&&S.lock[i]<=0?stateOf(i,S.cur,true):null;
     const wh=S.phase==='play'?waznHint(i):null;
     h+=`<div class="line ${hint?'h-'+hint:''} ${junk?'junk':''} ${S.lock[i]>0?'locked':''} ${fxc}" data-line="${i}" tabindex="0" role="button" aria-label="السطر ${i+1}">
       ${startHint?`<div class="startzone" data-start="${i}"></div>`:''}
-      <div class="tags"><span style="display:flex;gap:6px"><span class="hintlab">${HINTLAB[hint]||''}</span>${startHint?`<span class="hintlab zs z-${startHint}">الأول: ${HINTLAB[startHint]||''}</span>`:''}${wh?`<span class="waznhint">+${wh} ← ${waznOf(S.wazn).n}</span>`:''}</span><span style="display:flex;gap:6px">${mod?`<span class="modlab" data-mod="${mod}">${ROWMODS[mod].n}</span>`:''}<span class="cap">${L.length}/${lineMax(i)}</span></span></div>
+      <div class="tags"><span style="display:flex;gap:6px"><span class="hintlab">${HINTLAB[hint]||''}</span>${startHint?`<span class="hintlab zs z-${startHint}">الأول: ${HINTLAB[startHint]||''}</span>`:''}${wh?`<span class="waznhint">+${wh} ← ${waznOf(S.wazn).n}</span>`:''}</span><span style="display:flex;gap:6px">${mod?`<span class="modlab" data-mod="${mod}">${ROWMODS[mod].n}</span>`:''}<span class="cap">${nRad(L)}/${RADMAX()} أصول${L.filter(c=>c.k==='a').length?` · ${L.filter(c=>c.k==='a').length} زيادة`:''}</span></span></div>
       <div class="lm"><div class="word ${ok?'ok':''} ${junk?'junk':''}">${s?(ok?displayOf(s):s):'<span class="ph">· · ·</span>'}</div>
       ${rootl}
-      ${L.some(t=>t.ench)?`<div class="chips">${L.filter(t=>t.ench).map(t=>`<span class="chip e-${t.ench}">${t.ch}</span>`).join('')}</div>`:''}</div>
+      <div class="slots">${(()=>{const rad=L.filter(isRad),used=L.filter(c=>c.k==='a');
+        const at=k=>used.filter(c=>seatOf(c,c.seat)===k).map(c=>`<span class="aff">${afOf(c).t}</span>`).join('');
+        let h=at(0);
+        for(let k=0;k<RADMAX();k++){ const r=rad[k]; h+=`<span class="slot ${r?'has':''}">${r?r.ch:'·'}</span>`+at(k+1); }
+        return h;})()}</div></div>
       ${sealBtn}</div>`;
   }
   const pileN=S.draw.length+S.top.length;
@@ -547,9 +623,9 @@ function render(){
   <div class="hand">
     <button class="burn" data-act="burn" ${S.burns<=0||S.phase!=='play'?'disabled':''}>احرق<small>${S.burns} متبقية</small></button>
     <div class="cur">${tileHTML(S.cur,'big')}
-      <div class="enchlab">${S.cur&&S.cur.ench?ENCH[S.cur.ench].n:`<span class="pile">في الكومة ${pileN} من ${S.bag.length}</span>`}</div>
+      <div class="enchlab">${S.cur&&S.cur.k==='a'?`<b>${afOf(S.cur).n}</b> · ${SEATS[afOf(S.cur).s]}`:`<span class="pile">في الكومة ${pileN}</span>`}</div>
       ${S.boss&&S.boss.id==='rush'?'<div class="timer"><i style="width:100%"></i></div>':''}
-      ${S.held?`<button class="heldbtn" data-tool="kaff">في الكَفّ: ${S.held.ch}</button>`:''}</div>
+      ${S.held?`<button class="heldbtn" data-tool="kaff">في الكَفّ: ${cardTxt(S.held)}</button>`:''}</div>
     <button class="nextwrap" data-act="twin" ${has('tawam')&&!hideNext?'':'tabindex="-1"'}>${has('tawam')&&!hideNext?'التالي · بدّل':'التالي'}${hideNext?tileHTML(null,'small'):tileHTML(S.next,'small')}</button>
   </div>
   ${Object.keys(S.tools).length?`<div class="tools">${Object.keys(S.tools).map(t=>{
@@ -557,7 +633,7 @@ function render(){
     return `<button class="tool ${armed?'armed':''}" data-tool="${t}" ${c<=0||S.phase!=='play'?'disabled':''}>${TOOLS[t].n}<small>${c}</small></button>`;
   }).join('')}${S.aim?'<span class="aimlab">اختر السطر…</span>':''}</div>`:''}
   <div class="foot">
-    ${S.notebook.map(e=>`<span class="nb">${spaced(e.root)}<small>م${e.lvl}</small></span>`).join('')}
+    ${S.roots.map(r=>{const nb=nbOf(r); return `<span class="nb ${nb?'lit':''}">${spaced(r)}${nb?`<small>م${nb.lvl}</small>`:''}</span>`;}).join('')}
     ${leadP?`<button class="pathchip lead" data-path="${leadP.id}" style="--pc:${leadP.c}">مسار ${leadP.n}<b>م${pathLevelOf(lead)}</b></button>`:''}
     ${S.relics.map(r=>`<button class="relic" data-relic="${r}">${RELICS[r].n}</button>`).join('')}
     ${comboState().live.map(c=>`<button class="combo" data-combo="${c.n}">⁂ ${c.n}</button>`).join('')}
@@ -570,10 +646,7 @@ function render(){
 }
 /* Answers "why this letter?" from what the language and the run already know:
    a زائدة widens which أوزان you can reach, a radical deepens the roots you keep spelling. */
-function letterTag(ch){
-  if(ZAWAID.has(ch)) return 'زائدة — تبني الأوزان';
-  return 'جذر — يحمل المعنى';
-}
+
 function bagGrid(clickable){
   const tiles=[...S.bag].sort((a,b)=>a.ch.localeCompare(b.ch,'ar'));
   return `<div class="baggrid">${tiles.map(t=>clickable?`<button data-pick="${t.id}">${tileHTML(t)}</button>`:tileHTML(t)).join('')}</div>`;
@@ -584,17 +657,17 @@ function renderOverlay(){
   if(P==='title'){
     let best=0; try{best=+localStorage.getItem('harf-best')||0}catch(e){}
     o=`<div class="card"><h1>حرف بحرف</h1>
-      <p class="sub">كيسك عشرة حروف فقط. تسقط عليك واحدًا تلو الآخر، وأنت تختار السطر.</p>
+      <p class="sub">أربعة جذور، تعرفها عن ظهر قلب. تسقط بطاقاتها واحدة تلو الأخرى، وأنت تختار السطر.</p>
       <ul class="rules">
-        <li><span class="ic">ب</span><span><b>اضغط سطرًا</b> لتضع فيه الحرف. لونه يخبرك: <b style="color:var(--glaze)">فيروزي</b> يبقى حيًا، <b style="color:var(--saffron)">ذهبي</b> يكمل كلمة، <b style="color:var(--crack)">أحمر</b> ينكسر.</span></li>
-        <li><span class="ic g">خ</span><span>عندما تكتمل كلمة يظهر <b>الختم</b>. اختم الآن، أو غامر بحرف آخر لكلمة أطول.</span></li>
-        <li><span class="ic t">ج</span><span><b>الجذر × الوزن</b>: جذور دفترك تكبر كلما ختمت كلماتها، والأوزان (فاعل، مفعول، تفعيل…) لها مكافأتها.</span></li>
-        <li><span class="ic v">ك</span><span><b>الكيس هو بناؤك</b>: كل حرف فيه يسقط عليك في كل جولة. أضف حروف جذورك واحذف ما لا يخدمها.</span></li>
+        <li><span class="ic t">ج</span><span><b>ثلاثة أصول تصنع جذرًا</b>: السطر يقبل ثلاث بطاقات أصول لا أكثر — ك·ت·ب — فإذا اكتمل الجذر صار كلمة.</span></li>
+        <li><span class="ic v">ز</span><span><b>والزوائد تبني الوزن عليه</b>: «ال» و«ا» و«ون» تُعلَّق على الجذر في مقاعدها، والسطر يقبل منها ما لا يُحدّ. كتب ← كاتب ← الكاتبون.</span></li>
+        <li><span class="ic g">خ</span><span>عندما تتمّ الكلمة يظهر <b>الختم</b>. اختم الآن، أو علّق زيادة أخرى لكلمة أطول وأغلى — إن كانت كلمة أصلًا.</span></li>
+        <li><span class="ic">ك</span><span><b>كيسك هو بناؤك</b>: من المتجر تشتري الزوائد التي تصنع أوزانك، والجذور التي تتقنها.</span></li>
       </ul>
       <button class="btn" data-act="starters">ابدأ الرحلة</button>
       ${best?`<p class="sub">أفضل رحلة: ${best} نقطة</p>`:''}</div>`;
   } else if(P==='starters'){
-    o=`<div class="card wide"><h2>مَن تكون؟</h2><div class="choice chars">${CHARS.map(c=>`<button data-starter="${c.id}"><b>${c.n}</b><span class="rule">${c.d}</span><span class="letters">${[...c.letters].join(' ')}</span><span class="why">${c.w}</span><span class="stat">${c.seals} أختام · ${c.gold} دينار · جذر ${spaced(c.root)}</span></button>`).join('')}</div></div>`;
+    o=`<div class="card wide"><h2>مَن تكون؟</h2><div class="choice chars">${CHARS.map(c=>`<button data-starter="${c.id}"><b>${c.n}</b><span class="rule">${c.d}</span><span class="roots">${c.roots.map(r=>spaced(r)).join('  ·  ')}</span><span class="why">${c.w}</span><span class="stat">${c.seals} أختام · ${c.gold} دينار${(c.aff||[]).length?' · يبدأ بـ '+c.aff.map(a=>'«'+AFFIX[a].t+'»').join(' '):''}</span></button>`).join('')}</div></div>`;
   } else if(P==='intro'){
     const lid=leadingPath(), lp=lid?PATHS.find(x=>x.id===lid):null;
     o=`<div class="card"><h2>الجولة ${S.round}</h2>
@@ -618,22 +691,18 @@ function renderOverlay(){
       <button class="btn ${S.nbOffer?'ghost':''}" data-act="shop">${S.nbOffer?'تخطَّ، إلى السوق':'إلى السوق'}</button></div>`;
   } else if(P==='shop'){
     const sh=S.shop, p=S.picker;
-    if(p&&p.mode==='letters'){
-      const o2=sh.offers[p.idx];
-      o=`<div class="card"><h2>اختر حرفًا لكيسك</h2><p class="sub">${S.bag.length>=bagCap()?'الكيس ممتلئ: ستختار بعدها حرفًا يُستبدل.':'في كيسك '+S.bag.length+' من '+bagCap()+'.'} النقطة الفيروزية = من حروف جذور دفترك.</p>
-        <div class="letterpick">${o2.opts.map(c=>`<button data-letter="${c}">${tileHTML({ch:c,ench:null},'big')}<small class="lettertag">${letterTag(c)}</small></button>`).join('')}</div><button class="btn ghost" data-act="cancelpick">رجوع</button></div>`;
-    } else if(p&&p.mode==='row'){
+    if(p&&p.mode==='row'){
       o=`<div class="card"><h2>انقش «${ROWMODS[p.mod].n}» على سطر</h2><p class="sub">${ROWMODS[p.mod].d} يحل محل أي نقش سابق.</p>
         <div class="rowpick">${Array.from({length:nLines()},(_,r)=>`<button data-row="${r}">السطر ${r+1}${S.rowMods[r]?' · الآن: '+ROWMODS[S.rowMods[r]].n:' · بلا نقش'}</button>`).join('')}</div>
         <button class="btn ghost" data-act="cancelpick">رجوع</button></div>`;
     } else if(p){
-      const title=p.mode==='ench'?`اختر حرفًا يصير ${ENCH[p.ench].n}`:p.mode==='replace'?`أي حرف يُستبدل بـ«${p.ch}»؟`:'اختر حرفًا تحذفه من الكيس';
+      const title=p.mode==='ench'?`اختر بطاقة تصير ${ENCH[p.ench].n}`:'اختر بطاقة تحذفها من كيسك';
       o=`<div class="card"><h2>${title}</h2>${p.mode==='ench'?`<p class="sub">${ENCH[p.ench].d}</p>`:''}${bagGrid(true)}<button class="btn ghost" data-act="cancelpick">رجوع</button></div>`;
     } else {
       o=`<div class="card"><h2>السوق</h2><p class="goldline">${S.gold} دينار</p>
         <div class="shopgrid">${sh.offers.map((x,i)=>offerHTML(x,i)).join('')}</div>
         <div class="shoprow">
-          <button class="btn ghost" data-act="remove" ${S.gold<2||sh.removed?'disabled':''}>احذف حرفًا · ٢</button>
+          <button class="btn ghost" data-act="remove" ${S.gold<2||sh.removed?'disabled':''}>احذف بطاقة · ٢</button>
           <button class="btn ghost" data-act="reroll" ${S.gold<sh.reroll?'disabled':''}>عروض جديدة · ${sh.reroll}</button>
           <button class="btn ghost" data-act="book">الكيس والأوزان</button>
         </div>
@@ -641,10 +710,11 @@ function renderOverlay(){
     }
   } else if(P==='book'){
     const lead=leadingPath();
-    o=`<div class="card"><h2>كيسك · ${S.bag.length} من ${bagCap()}</h2>${bagGrid(false)}
+    o=`<div class="card"><h2>كيسك · ${S.bag.length} بطاقة</h2>${bagGrid(false)}
       <h3>الدفتر</h3><div class="kv">${S.notebook.map(x=>`<div><span>${spaced(x.root)}</span><b>م${x.lvl} · +${5*x.lvl} نقاط +${x.lvl} مضاعف</b></div>`).join('')}</div>
       <h3>الأوزان</h3><div class="pat">${PATTERNS.map(p=>{const lv=S.patLv[p.id]||1; return `<div><b>${p.n}</b>م${lv} · +${Math.round(p.c*(1+.5*(lv-1)))} نقاط +${p.m+lv-1} مضاعف</div>`;}).join('')}</div>
-      <h3>كيسك حرفًا حرفًا</h3><div class="pat">${([...new Set(S.bag.map(t=>t.ch))] as string[]).sort((a,b)=>a.localeCompare(b,'ar')).map(c=>`<div><b>${c}</b>${letterTag(c)}</div>`).join('')}</div>
+      <h3>جذورك</h3><div class="pat">${S.roots.map(r=>`<div><b>${spaced(r)}</b>${nbOf(r)?'في دفترك · م'+nbOf(r).lvl:'ثلاث بطاقات أصول'}</div>`).join('')}</div>
+      <h3>زوائدك</h3><div class="pat">${S.bag.filter(c=>c.k==='a').length?[...new Set(S.bag.filter(c=>c.k==='a').map(c=>c.a))].map(a=>`<div><b>${AFFIX[a].t}</b>${AFFIX[a].n} · ${SEATS[AFFIX[a].s]}</div>`).join(''):'<div><b>—</b>لا زوائد بعد: اشترِ واحدة من المتجر</div>'}</div>
       <h3>المسارات</h3><div class="pathsgrid">${pathStats().map(p=>`<div style="--pc:${p.c}" class="${p.id===lead?'lead':''}"><b>${p.n}${p.lvl>0?' · م'+p.lvl+' · +'+Math.round(p.lvl*15)+'٪':''}</b><small>${p.d}</small></div>`).join('')}</div>
       ${S.permMult?`<p class="sub">مضاعف دائم: +${fmt(S.permMult)}</p>`:''}
       ${S.rowMods.slice(0,nLines()).some(Boolean)?`<h3>نقوش السطور</h3><div class="kv">${S.rowMods.slice(0,nLines()).map((m,r)=>`<div><span>السطر ${r+1}</span><b>${m?ROWMODS[m].n:'—'}</b></div>`).join('')}</div>`:''}
@@ -668,7 +738,8 @@ function offerHTML(x,i){
   if(x.k==='relic'){kind='طلسم';nm=RELICS[x.id].n;ds=RELICS[x.id].d;cls='k-relic';}
   else if(x.k==='ench'){kind='نقش حرف';nm='حرف '+ENCH[x.id].n;ds=ENCH[x.id].d+' تختار الحرف من كيسك.';}
   else if(x.k==='tool'){kind='أداة';nm=TOOLS[x.id].n;ds=TOOLS[x.id].d+` · ${TOOLS[x.id].ch} شحنات تتجدد كل جولة.`;}
-  else if(x.k==='letters'){kind='حروف';nm='حرف جديد';ds='واحد من: '+x.opts.join('، ')+(S.bag.length>=bagCap()?' (يستبدل حرفًا)':'');}
+  else if(x.k==='affix'){const a=AFFIX[x.id];kind='زيادة';nm=a.n+' «'+a.t+'»';ds=a.d+` · تُوضع ${SEATS[a.s]}.`;cls='k-aff';}
+  else if(x.k==='root'){kind='جذر';nm=spaced(x.id);ds='جذر خامس في كيسك: ثلاث بطاقات أصول جديدة.';cls='k-root';}
   else if(x.k==='row'){kind='نقش سطر';nm='سطر '+ROWMODS[x.id].n;ds=ROWMODS[x.id].d;cls='k-row';}
   else if(x.k==='nbup'){kind='حبر';nm='ارفع جذر '+spaced(x.root);ds='+١ مستوى لهذا الجذر في دفترك.';cls='k-up';}
   else {const p=PATTERNS.find(q=>q.id===x.id);kind='ميزان';nm='ارفع وزن '+p.n;ds=`+١ مستوى: نقاط ومضاعف أعلى لكل كلمة على وزن ${p.n}.`;cls='k-up';}
@@ -717,13 +788,12 @@ function audio(kind,lvl=0){
 
 let prevPhase='play';
 document.addEventListener('click',e=>{
-  const b=e.target.closest('[data-seal],[data-act],[data-buy],[data-pick],[data-letter],[data-relic],[data-mod],[data-start],[data-line],[data-starter],[data-write],[data-replace],[data-row],[data-path],[data-tool],[data-char],[data-combo]');
+  const b=e.target.closest('[data-seal],[data-act],[data-buy],[data-pick],[data-relic],[data-mod],[data-start],[data-line],[data-starter],[data-write],[data-replace],[data-row],[data-path],[data-tool],[data-char],[data-combo]');
   if(!b||!S) return;
   const D=b.dataset;
   if(D.seal!=null) return seal(+D.seal);
   if(D.buy!=null) return buy(+D.buy);
   if(D.pick!=null) return pickTile(+D.pick);
-  if(D.letter!=null) return pickLetter(D.letter);
   if(D.row!=null) return pickRow(+D.row);
   if(D.starter) { newRun(D.starter); return render(); }
   if(D.tooltip){ const t=TOOLS[D.tooltip]; return toast(`<b>${t.n}</b> — ${t.d}`); }

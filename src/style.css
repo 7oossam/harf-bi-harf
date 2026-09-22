@@ -293,3 +293,26 @@ button:focus-visible,.line:focus-visible{outline:2px solid var(--ink);outline-of
 .combotag{font-size:11px;color:var(--verdigris);border:1px solid var(--verdigris);
   border-radius:4px;padding:1px 6px;align-self:flex-start}
 .offer.completes{border-color:var(--verdigris)}
+
+/* ===== البطاقات — two card kinds =====
+   An أصل carries meaning, a زيادة builds the wazn onto it. Colour is semantic here as
+   everywhere: ink for radicals (the root is the substance), glaze for affixes (the shape
+   laid over it). A radical from one of YOUR roots is inked solid; a stray one is outlined. */
+.tile.card-rad{border:1px solid var(--rule);color:var(--ink)}
+.tile.card-rad.own{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.tile.card-aff{background:var(--glaze,#E9E2CE);border:1px dashed var(--lapis);color:var(--lapis);
+  font-family:var(--ui);font-size:15px}
+.tile.card-aff .seat{position:absolute;bottom:2px;inset-inline-start:0;inset-inline-end:0;
+  text-align:center;font-size:8px;opacity:.7;letter-spacing:0}
+.tile.card-aff .val{color:var(--lapis)}
+
+/* the row's root slots: three seats you can see filling */
+.slots{display:flex;gap:4px;align-items:center;justify-content:flex-start;margin-top:3px;flex-wrap:wrap}
+.slot{min-width:20px;height:22px;line-height:22px;text-align:center;border-bottom:1.5px solid var(--rule);
+  font-family:var(--naskh);font-size:17px;color:var(--ink2)}
+.slot.has{border-bottom-color:var(--ink);color:var(--ink)}
+.slots .aff{font-size:13px;color:var(--lapis);border:1px dashed var(--lapis);border-radius:4px;padding:0 5px;line-height:19px}
+.nb.lit{color:var(--ink);font-weight:600}
+.offer.k-aff .nm{color:var(--lapis)}
+.offer.k-root .nm{font-family:var(--naskh);font-size:19px}
+.choice.chars .roots{font-family:var(--naskh);font-size:19px;color:var(--ink);letter-spacing:1px}

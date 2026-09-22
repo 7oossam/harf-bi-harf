@@ -13,6 +13,36 @@ export async function loadDict(url='dict.bin'){
   }
   SORTED=[...IDX.keys()];
   for(let i=1;i<SORTED.length;i++){ if(SORTED[i-1]>SORTED[i]){ SORTED.sort(); break; } }
+  buildRootIndex();
+}
+
+/* ================= ROOTS AS PLAYABLE OBJECTS =================
+   The card game is built on trilateral roots, so a root is no longer a scoring lookup —
+   it is the thing the player assembles. Three indexes come out of ROOTS[]:
+     ROOTSET   — every root the lexicon knows, for "are these three letters a root?"
+     RPREFIX   — every prefix of every root, for "can these letters still become one?"
+     RCOUNT    — how many word forms each root produces, which is how productive it is */
+export const ROOTSET=new Set(), RPREFIX=new Set(), RCOUNT=new Map();
+function buildRootIndex(){
+  for(const r of ROOTS){
+    if(!r||r.length!==3) continue;              // trilateral only: that is the game's unit
+    RCOUNT.set(r,(RCOUNT.get(r)||0)+1);
+  }
+  for(const r of RCOUNT.keys()){
+    ROOTSET.add(r);
+    for(let i=1;i<=r.length;i++) RPREFIX.add(r.slice(0,i));
+  }
+}
+export const isRoot=s=>ROOTSET.has(s);
+/* can this partial sequence of radicals still reach a real root? */
+export const rootAlive=s=>!s||RPREFIX.has(s);
+/* Roots worth building a run around: productive ones, and no ء/ة which do not behave as
+   radicals in the patterns the game builds. Sorted by how many forms they yield. */
+export function fertileRoots(min=25){
+  const out=[];
+  for(const [r,c] of RCOUNT) if(c>=min && !/[ءة]/.test(r) && new Set(r).size===3) out.push([r,c]);
+  out.sort((a,b)=>b[1]-a[1]);
+  return out.map(x=>x[0]);
 }
 export function lb(s){let lo=0,hi=SORTED.length;while(lo<hi){const m=(lo+hi)>>1;if(SORTED[m]<s)lo=m+1;else hi=m;}return lo;}
 export const isAlive=s=>{ if(!s) return true; const k=lb(s); return k<SORTED.length && SORTED[k].startsWith(s); };

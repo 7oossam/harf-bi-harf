@@ -64,142 +64,46 @@ source files, which are not committed. See the header of each tool.
 
 ## Design state
 
-Working: the drop/seal loop, colored row hints, roots × patterns scoring, notebook roots,
-row inscriptions, 25 relics, 8 tools, 5 characters, 6 bosses, the shop, the bag, and four named **Paths**
-(`PATHS` in `data.ts`) — الجذر (notebook/resonance), الوزن (patterns), السلسلة (chain), الكيس
-(bag/enchants). A path's level is computed live from what you already own (notebook levels,
-pattern levels, max chain reached, enchanted letters/small bag), not chosen from a menu. Words
-matching a path's condition get an extra multiplier (`x *= 1 + .15*level`) that stacks with
-resonance/chain/row-mods in the same multiplicative tier — this is the "synergies multiply"
-fix. The leading path is shown as a badge strip under the notebook, on the round-intro card,
-and at run end; the shop (`genOffers`) biases its relic pool and tags offers ("✓ يخدم مسارك")
-toward the leading path, and `pathFeedback()` toasts the path + level after a purchase feeds
-it — that's the "direction/payoff" fix. Two new relics (`collector`, `ember`) exist purely to
-give the pattern and chain paths a build-defining hook, mirroring the bag path's `orphan` and
-the root path's `inkwell`.
+**The game is a card game about trilateral roots.** A row holds at most three **أصول**
+(radical cards) — that is the root — and up to one **زيادة** (affix card) in each of four
+seats hung around them. This is not a scoring bonus laid over a word game; it is الجذر × الوزن
+as the literal rule, and it is the one design here that only Arabic can support.
 
-**The seal-or-push rebalance.** The round used to end the instant you crossed the target, and
-unused drops paid gold — so the game paid you to stop playing, and sealing 3-letter words fast
-was optimal. Now the round always runs its 20 drops, and beating the target buys gold instead
-(`winRound`, capped at +8). A broken row pays scrap equal to its letter values, so pushing is a
-gradient rather than a cliff. Rows have their own ceilings (`LINE_CAPS` = 4/6/8) so "which row?"
-is a real choice; a full row refuses the drop rather than breaking.
+An affix card knows its seat, because in Arabic position IS meaning: the same ا makes كاتب in
+seat 1 and كتاب in seat 2. The word assembles seat by seat, `A0 + R0 + A1 + R1 + A2 + R2 + A3`
+(`asmLine` in `game.ts`):
 
-**The letter economy — what makes a decision cost something.** Sid Meier's test for an
-interesting decision is that no option is clearly best and the player *gives something up*.
-The old round failed that: sealing was free, letters always came back, and you could seal as
-often as you liked. Two scarcities fix it, taken from the two games that solve this best:
+| cards | word |
+|---|---|
+| ك ت ب | كَتَب |
+| + ا@1 | كاتب |
+| + ال@0 + ون@3 | الكاتبون |
+| ك ت ب + م@0 + و@2 | مكتوب |
 
-- **Spent letters (Scrabble's "leave").** The round's pile is every bag letter `COPIES` (3)
-  times, shuffled, and it *never refills*. Sealing strikes the word's letters out of what is
-  still to fall (`spendLetters`). A long word scores more and shortens your own round — that
-  is the trade.
-- **Five seals (Balatro's hand budget).** `SEALS` per round. "Can I make a word" stops being
-  the question; "is this word worth one of my five" starts being it. The round ends when the
-  pile runs dry or the seals run out.
+Measured against the real lexicon before any of it was built: **74%** of single-affix
+attachments land on a real word, **29%** of two-affix stacks do. So one زيادة is nearly safe
+and stacking is a genuine gamble — which is where the push-your-luck lives. 4,108 roots are
+fertile enough to build a run on (`fertileRoots` in `dict.ts`, ≥25 forms, no ء/ة, three
+distinct letters).
 
-الرسوخ was removed to make room: it weighted the draw pile, which must now deplete strictly,
-and it drifted the bag automatically, which fought the bag-building it was meant to serve.
+**Why one affix per seat, when the brief said "any number".** Truly unlimited was built first
+and it produced rows like `ومراوااوالالاال` that still read as *alive*, because the liveness
+test only ever looks at the radicals. Arabic hangs one زيادة per seat anyway — كاتب has one
+ألف after the فاء, not three. One-per-seat makes the row a template you watch filling
+(`seatsUsed`/`seatFree`), and turns every affix into a real choice of *where*, not just
+whether. A row therefore tops out at three radicals + four affixes.
 
-**The content categories, and why there are five.** The old set was seventeen relics that
-were almost all scoring modifiers, so no two runs felt different: a multiplier changes what
-the number says afterwards, not what you *do*. The rewrite separates content by **who decides
-and when**, which is the only axis that makes five categories five things instead of one:
-
-| table | Arabic | acts | decided by |
-|---|---|---|---|
-| `CHARS` | الكُتّاب | the whole run | you, before you know anything |
-| `RELICS` | الحُروز | on its own trigger | the game, via the shop |
-| `TOOLS` | الأدوات | when you spend a charge | **you, mid-round** |
-| `ROWMODS` | السطور | all round, one row | you, by inscribing |
-| `ENCH` | الوسوم | one letter, forever | you, by choosing the letter |
-
-**Combos are a table, not a hope** (`COMBOS` in `data.ts`). Hades names its duo boons, and
-that is most of why its builds read as builds: a synergy the player cannot see is a
-coincidence. Each entry is a named pair (or trio) worth more than its parts, with parts
-namespaced across categories — `char:` `relic:` `tool:` `row:` `mark:` — because the crossing
-is the point. Three things read this table:
-
-- `comboState()` splits them into **live** (all parts owned, shown in the margin) and **near**
-  (exactly one part missing).
-- `genOffers()` pulls anything that completes a *near* combo to the front of its pool, so a
-  build you start is a build you can finish rather than one the shuffle has to hand you. The
-  leading path is now the weaker tiebreak behind that.
-- The shop card names the combo an offer would complete ("يُكمل: الطاحونة"), and `comboCheck()`
-  toasts one the moment it closes.
-
-Adding content means adding to `COMBOS` too, or the new thing is an island. Two relics exist
-purely as bridges to categories that had none: المِسَنّ recharges tools on every seal (tools
-had zero relic support), and الرَّماد banks burned letters into the next seal (burning was
-pure loss, so الغِربال's +2 burns bought nothing).
-
-**Watch for anti-synergies** — two of the first draft's were real traps, both found by audit
-rather than play: القلم stops rows breaking so حجر الرحى never fired, though the chain path
-recommended both (fixed by paying الرحى for *any* row lost, via `rowLost()`); and القَلْب
-accepted a mirrored row but scored the unmirrored string, so `rootOf`/`patOf` ran on the
-meaningless direction and the relic paid nothing.
-
-`TOOLS` is the new one and the point of the exercise: before it, the only answer to a bad
-letter was "which row hurts least" plus the burn button. Charges reset each round, so a tool
-is a budget inside the round rather than a permanent edge. Tools that target a row (`ROW_TOOLS`)
-arm `S.aim` and resolve on the next row click; the rest act on the tile in hand.
-
-Relics carry a `hook` field naming where in the loop they fire — `pile` / `hand` / `row` /
-`word` / `seal` / `score` — so the wiring stays findable as the pool grows. The `word` hook is
-the interesting one and the one a word game uniquely has: القَلْب accepts a row whose mirror is
-a word, الشّاذّ accepts two letters, الجَذْر الأعمى treats every root as if it were in your
-notebook. `wordOK()` is the single acceptance test all of them flow through — `stateOf`,
-the seal button, auto-seal and `canAct` must never call `isWord` directly or the relics
-silently stop applying to one of them.
-
-Two old relics were **promoted out of the pool** rather than rewritten. المُعَرِّب (build toward
-the start of the word) is base Arabic — words build right-to-left, and only ever appending was
-an arbitrary restriction — so it is always on. النقطة became a tool, because cycling a letter
-through its dot-family (ب ت ث ن ي) is too good a verb to be a passive you might never be offered.
-
-**Letters are not given invented properties.** Arabic already assigned the one that matters:
-`ZAWAID` (سألتمونيها) marks the ten augment letters that build a وزن onto a root; everything
-else is a radical that carries meaning. `letterTag()` states which, so the shop's "why this
-letter?" has an answer — a زائدة widens the أوزان you can reach, a radical deepens the roots
-you keep spelling. Do not bolt game-stats onto letters; surface what the language already says.
-
-**الأوزان: one per round, not eleven.** `S.wazn` commissions a single pattern each round, shown
-in the head margin and on the round-intro card, and it pays double. `waznHint(i)` scans the
-letters still undrawn and tells a row which one would finish it on that wazn — recall becomes
-perception, so the player never has to memorise the eleven templates.
+**The bag is four roots you can name.** Twelve radical cards, not an alphabet — you know what
+is in there. All four start in your notebook, which is what keeps them yours: twelve radicals
+throw up plenty of *accidental* roots (خ+ت+م from three different roots is real), and that is
+a good discovery, but without the notebook bonus paying more for your own roots the four
+would be decoration.
 
 **Known gaps — the next work:**
-- Round targets for the non-boss rounds past round 4 are still lightly measured.
-- Path level thresholds (`pathLvl`: level = floor(progress/3), cap 5) and the +15%/level bonus
-  are first-pass numbers.
-
-When changing scoring, re-run `tools/bot.mjs` before trusting the numbers — and read the
-stall line first. **Every "balance problem" measured in this project so far has turned out to
-be a bug wearing balance's clothes**, so the first question is never "are the targets wrong",
-it is "is the thing I am measuring even working":
-
-- the bot deadlocked on full rows (`h-dead` is a legal move, `h-full` is not) and reported
-  frozen runs as "reached round 3" — three of six runs, every number polluted;
-- the round could freeze forever when every row refused the tile and burns were spent;
-- `floatAt` threw inside `seal()`, aborting it before `S.lines[i]=[]`, so the same row could
-  be sealed repeatedly for score — which read as "the new content is far too strong" (6/6
-  clears, round-8 scores of 7395) and was a scoring exploit.
-
-`tools/bot.mjs` now reports `BOT STALLED` and drops that run from the denominator rather than
-counting it as progress. A run that hits the iteration cap is not a result.
-
-Measured 2026-09-22, clean instrument, `MINLEN=5`, starter وَرّاق, 8 runs:
-- before re-costing bosses: **1/8** reached round 6, and **six of eight died at round 3** —
-  median round 2 ≈ 296 against target 150, median round 3 ≈ 166 against target 210.
-- after: **3/8** reached round 6, deaths spread across rounds 2/3/5/6 with only one at round 3.
-  Spread beats a cliff; that is the shape to preserve.
-
-The bot is a deliberately poor player — it seals greedily at 5+ letters and buys the first
-affordable offer — so treat it as an unskilled floor, not a target. One artifact to know about:
-the starting bag is exactly `BAG_CAP`, so every letter purchase is a forced swap, and the bot
-replaces the first tile in the bag. It routinely guts its own ا or ل, which is what the
-occasional `r1:966 → r2:116` collapse is. That is a choice for a human and noise for the bot —
-do not balance against it.
+- `TARGETS` were measured for the *letter* game and are certainly wrong for the card game.
+- Affixes are ~20-25% of the pile at run start; whether that is the right ratio is unmeasured.
+- An affix whose seat is taken in every row is unplayable — burn, المِفَكّ, or a seal clears
+  it. Whether that friction is interesting or just annoying needs play, not a bot.
 
 ## Conventions
 

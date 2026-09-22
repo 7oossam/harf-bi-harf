@@ -37,29 +37,71 @@ export const ZAWAID=new Set([...'سالتمونيه']);
    (Scrabble's leave + Balatro's hand budget. Nothing here is free any more.) */
 export const COPIES=3, SEALS=5;
 
+/* ================= THE TWO CARD KINDS =================
+   The game is built on the trilateral root. A row holds at most THREE أصول (radical cards) —
+   that is the root — and any number of زوائد (affix cards) hung around them. This is not a
+   scoring bonus laid over a word game; it is الجذر × الوزن as the literal rule.
+
+   An affix card knows its seat, because in Arabic position IS meaning: the same ا makes
+   كاتب in seat 1 and كتاب in seat 2. Seats are counted against the three radicals:
+     0 — before the root (بادئة)      1 — after the first radical (بعد الفاء)
+     2 — after the second (بعد العين)  3 — after the root (لاحقة)
+   The word is assembled seat by seat: A0 + R0 + A1 + R1 + A2 + R2 + A3.
+     كتب                      → كَتَب
+     كتب + ا@1                → كاتب
+     كتب + ال@0 + ا@1 + ون@3  → الكاتبون
+     كتب + م@0 + و@2          → مكتوب
+   Measured against the real lexicon: 74% of single-affix attachments land on a real word,
+   29% of two-affix stacks do. So one زيادة is nearly safe and stacking is a genuine gamble —
+   which is exactly where the push-your-luck lives. */
+export const AFFIX={
+  /* بوادئ */
+  al :{t:'ال', s:0, v:2, m:1, n:'أل التعريف', d:'المعرفة: كتاب ← الكتاب'},
+  mim:{t:'م',  s:0, v:2, m:1, n:'ميم', d:'اسم المكان والفاعل: كتب ← مكتب'},
+  taa:{t:'ت',  s:0, v:2, m:1, n:'تاء', d:'التفعّل: علم ← تعلم'},
+  yaa:{t:'ي',  s:0, v:1, m:1, n:'ياء المضارعة', d:'الفعل المضارع: كتب ← يكتب'},
+  nun:{t:'ن',  s:0, v:1, m:1, n:'نون المضارعة', d:'نحن نفعل: كتب ← نكتب'},
+  ist:{t:'است',s:0, v:5, m:3, n:'است', d:'الاستفعال، وزن طويل ثقيل: علم ← استعلم'},
+  mst:{t:'مست',s:0, v:6, m:4, n:'مست', d:'المستفعِل: عمل ← مستعمل'},
+  /* بعد الفاء */
+  a1 :{t:'ا',  s:1, v:3, m:2, n:'ألف فاعِل', d:'اسم الفاعل: كتب ← كاتب'},
+  /* بعد العين */
+  a2 :{t:'ا',  s:2, v:3, m:2, n:'ألف فِعال', d:'المصدر: كتب ← كتاب'},
+  y2 :{t:'ي',  s:2, v:3, m:2, n:'ياء فعيل', d:'الصفة المشبهة: علم ← عليم'},
+  w2 :{t:'و',  s:2, v:3, m:2, n:'واو فعول', d:'المصدر والمفعول: علم ← علوم'},
+  /* لواحق */
+  ta :{t:'ة',  s:3, v:1, m:1, n:'تاء مربوطة', d:'التأنيث: كاتب ← كاتبة'},
+  un :{t:'ون', s:3, v:3, m:2, n:'واو ونون', d:'جمع المذكر السالم: كاتب ← كاتبون'},
+  in_:{t:'ين', s:3, v:3, m:2, n:'ياء ونون', d:'جمع المذكر نصبًا وجرًّا: كاتبين'},
+  at :{t:'ات', s:3, v:3, m:2, n:'ألف وتاء', d:'جمع المؤنث السالم: كاتبات'},
+  an :{t:'ان', s:3, v:3, m:2, n:'ألف ونون', d:'المثنّى: كاتبان'},
+  ya3:{t:'ي',  s:3, v:2, m:1, n:'ياء النسبة', d:'النسبة: عرب ← عربي'},
+  ha :{t:'ها', s:3, v:2, m:1, n:'ضمير الغائبة', d:'كتب ← كتبها'},
+};
+export const AFFIX_IDS=Object.keys(AFFIX);
+export const SEATS=['بادئة','بعد الفاء','بعد العين','لاحقة'];
+
 /* ================= WHO YOU ARE — الكُتّاب =================
-   A character is the one choice you make before you know anything, so each is a *rule*,
-   not a stat line: a sentence that changes how every later decision is judged. The bag is
-   tuned so the character's rule has something to bite on (the grammarian's bag is eight of
-   the ten حروف الزيادة, so أوزان are actually reachable). */
+   A character is four roots and a rule. The four roots are the whole point: you can SEE the
+   bag, you are not fishing in an alphabet. Twelve radical cards, and the أصول you know by
+   heart within one round. */
 export const CHARS=[
-  {id:'warraq',n:'الوَرّاق',letters:'المكتبونير',root:'كتب',seals:5,gold:4,
+  {id:'warraq',n:'الوَرّاق',roots:['كتب','درس','نسخ','جمع'],aff:['al','ta','a1'],seals:5,gold:4,
    d:'أول ختم في كل جولة لا ينفق ختمًا.',
-   w:'الناسخ الصبور: يكتب كثيرًا ويخطئ قليلًا. ابدأ به.'},
-  {id:'nahwi',n:'النَّحْوي',letters:'التسمونيفع',root:'فعل',seals:4,gold:4,
-   d:'وزن الجولة يدفع ×٣ بدل ×٢ — ولك أربعة أختام لا خمسة.',
-   w:'كيسه ثمانية من حروف الزيادة (سألتمونيها)، فالأوزان في متناوله وحدها.'},
-  {id:'badawi',n:'البَدَوي',letters:'الرحمبدو',root:'رحم',seals:5,gold:4,
-   d:'كيسك لا يتجاوز ثمانية حروف، وكل كلمة ×١٫٥.',
-   w:'ثمانية حروف لا عشرة: كومة أقصر، لكن كل ما فيها تعرفه.'},
-  {id:'sarraf',n:'الصَّرّاف',letters:'الصرفدنهمب',root:'صرف',seals:4,gold:12,
-   d:'تشتري ختمًا إضافيًا بخمسة دنانير، في أي وقت داخل الجولة.',
-   w:'يبدأ بمال أكثر وأختام أقل: عنده الأختام سلعة تُشترى لا حصّة تُعطى.'},
-  {id:'mujami',n:'المُعْجَمي',letters:'الجمعكتبور',root:'جمع',seals:5,gold:4,nb:2,
-   d:'الدفتر خمس خانات، والجذور ترتقي بضعف السرعة، وتبدأ بجذرين.',
-   w:'رحلته طويلة النفس: الدفتر يثقل ببطء ثم يدفع دفعة واحدة.'},
+   w:'جذور الكتابة، ومعه «ال» و«ة» من البداية. ابدأ به.'},
+  {id:'hakim',n:'الحكيم',roots:['علم','حكم','فهم','عقل'],aff:['y2','al','mim'],seals:5,gold:4,
+   d:'كل كلمة من خمسة أحرف فأكثر ×٢.',
+   w:'جذور المعرفة، وأخصبها علم (٧٣٤ صيغة). يكافئ الكلمة الطويلة.'},
+  {id:'tajir',n:'التاجر',roots:['ربح','حسب','دفع','عمل'],aff:['un','al','a1'],seals:4,gold:10,
+   d:'كل بطاقة زيادة في كلمتك المختومة تمنحك دينارًا.',
+   w:'أختام أقل ومال أكثر: عنده الزوائد دخل لا زينة.'},
+  {id:'rahhal',n:'الرحّالة',roots:['سفر','وصل','طرق','بعد'],aff:['mim','a1','ta'],seals:5,gold:4,
+   d:'تحمل خمسة جذور لا أربعة.',
+   w:'كيس أوسع وجذور أكثر: احتمالات أكثر وتركيز أقل.'},
+  {id:'shair',n:'الشاعر',roots:['شعر','قول','سمع','ذكر'],aff:['a2','w2','a1'],seals:5,gold:4,
+   d:'بطاقات الزيادة تسقط ضعف ما تسقط.',
+   w:'كومته غنية بالزوائد: يبني الأوزان الطويلة قبل غيره.'},
 ];
-/* kept as an alias so older saves/links that name a starter still resolve */
 export const STARTERS=CHARS;
 
 /* ================= أوزان ================= */
@@ -79,187 +121,160 @@ export const PATTERNS=[
 export const patOf=s=>{const core=hasAl(s)?s.slice(2):s; return PATTERNS.find(p=>p.test(core))||null;};
 
 /* ================= الحُروز — RELICS =================
-   Rewritten from nothing. The old set was seventeen scoring modifiers, which is why no
-   two runs felt different: a multiplier does not change what you *do*, only what the
-   number says afterwards. These are grouped by which part of the loop they rewrite, and
-   the best of them (قلب، مشدد، جذر أعمى، شاذّ) change what the board will accept as a
-   word — the one lever a word game has that a card game does not.
-
-   `hook` says where in the loop it fires, so the wiring stays findable:
-     pile  — what falls        hand — the tile in your hand      row — where it may land
-     word  — what counts       seal — what sealing costs/pays    score — the number
-   Two old relics were promoted out of the pool rather than rewritten: المُعَرِّب (build
-   toward the start of the word) is base Arabic and is now always on, and النقطة is a
-   tool you spend, not a passive you might never be offered. */
+   Retuned for the card game. `hook` says where in the loop it fires:
+     pile — what falls    root — the three أصول    affix — the زوائد
+     row  — the row rule  seal — cost and payoff   score — the number
+   The affix hooks are the new centre of gravity: زوائد are what the player collects, so
+   they are what the relics should bend. */
 export const RELICS={
-  /* --- pile: what falls --- */
-  minkhal:{n:'المِنْخَل',hook:'pile',path:'bag',d:'ترى الحرفين القادمين بدل حرف واحد.'},
-  khabiya:{n:'الخابية',hook:'pile',path:'bag',d:'كومة الجولة أربع نسخ من كل حرف بدل ثلاث — جولة أطول.'},
+  /* --- pile --- */
+  khabiya:{n:'الخابية',hook:'pile',path:'bag',d:'نسخة إضافية من كل بطاقة في كومة الجولة.'},
+  qura:{n:'القُرْعة',hook:'pile',path:'bag',d:'تبدأ كل جولة وأغلى بطاقاتك في يدك.'},
+  minkhal:{n:'المِنْخَل',hook:'pile',path:'bag',d:'ترى البطاقتين القادمتين بدل واحدة.'},
   ghirbal:{n:'الغِربال',hook:'pile',d:'+٢ حرقة في كل جولة.'},
-  ramad:{n:'الرَّماد',hook:'pile',d:'كل حرف تحرقه يضيف قيمته ×٣ إلى نقاط ختمك التالي.'},
-  qura:{n:'القُرْعة',hook:'pile',path:'bag',d:'تبدأ كل جولة وأغلى حروف كيسك في يدك.'},
+  ramad:{n:'الرَّماد',hook:'pile',d:'كل بطاقة تحرقها تضيف قيمتها ×٣ إلى ختمك التالي.'},
 
-  /* --- hand: the tile you are holding --- */
-  tawam:{n:'التَّوْأم',hook:'hand',d:'بدّل الحرف الحالي بالتالي، متى شئت.'},
-  madd:{n:'المَدّ',hook:'hand',d:'حرف العلّة (ا و ي) يمكن إسقاطه مكان أيّ من إخوته الثلاثة.'},
+  /* --- affixes: the heart of the new game --- */
+  zaida:{n:'الزائدة',hook:'affix',path:'pattern',d:'بطاقات الزيادة تسقط ضعف ما تسقط.'},
+  mushtaqq:{n:'المُشتَقّ',hook:'affix',path:'pattern',d:'كل زيادة في كلمتك +١ مضاعف إضافي.'},
+  mulhaq:{n:'المُلحَق',hook:'affix',path:'pattern',d:'تضع الزيادة في أي خانة شئت، لا في خانتها وحدها.'},
+  sarfi:{n:'الصَّرْفي',hook:'affix',path:'pattern',d:'كلمة فيها ثلاث زيادات فأكثر: ×٣.'},
+  tadeef:{n:'التَّضعيف',hook:'affix',d:'أول زيادة تضعها في كل سطر لا تُشطب من الكومة.'},
 
-  /* --- row: where it may land --- */
-  tufayli:{n:'الطُّفَيْلي',hook:'row',d:'الحرف الذي كان سيكسر سطرًا يقفز إلى أول سطر يقبله.'},
-  rabi:{n:'السطر الرابع',hook:'row',d:'سطر رابع تحت الثلاثة — لكنك لا ترى الحرف التالي.'},
-  qalam:{n:'القلم المكسور',hook:'row',path:'chain',d:'السطور لا تنكسر: السطر الميت يصير حشوًا تمسحه مقابل ٣ نقاط لكل حرف.'},
-  rihab:{n:'الرِّحاب',hook:'row',d:'+٢ في سقف كل سطر.'},
+  /* --- the root itself --- */
+  qalb:{n:'القَلْب',hook:'root',path:'root',d:'ترتيب الأصول لا يهمّ: أي ترتيب يكوّن جذرًا حقيقيًا يُقبل.'},
+  ibdal:{n:'الإبدال',hook:'root',d:'تحوّل الأصل في يدك إلى أخيه في عائلة النقط: ب ← ت ← ث ← ن ← ي.'},
+  khamis:{n:'الجذر الخامس',hook:'root',path:'root',d:'جذر إضافي في كيسك، تختاره من المتجر.'},
+  mihbara:{n:'المِحْبَرة',hook:'root',path:'root',d:'خانة زائدة في الدفتر، وجذوره تكسب الخبرة مضاعفة.'},
+  ishtiqaq:{n:'الاشتقاق',hook:'root',path:'root',d:'كلمة من جذر ختمته في هذه الجولة: ×٢.'},
+  ablind:{n:'الجَذْر الأعمى',hook:'root',path:'root',d:'كل جذر يُحسب كأنه في دفترك بمستوى ١.'},
 
-  /* --- word: what the board accepts (the interesting ones) --- */
-  qalb:{n:'القَلْب',hook:'word',d:'السطر يُقبل أيضًا إذا كان مقلوبه كلمة. اقرأه من الجهة الأخرى.'},
-  shadd:{n:'المُشَدِّد',hook:'word',d:'الحرفان المتماثلان المتجاوران يُحسبان أربع مرات في النقاط.'},
-  ablind:{n:'الجَذْر الأعمى',hook:'word',path:'root',d:'كل كلمة تُحسب كأن جذرها في دفترك بمستوى ١.'},
-  shadh:{n:'الشّاذّ',hook:'word',d:'كلمة من حرفين تُقبل، وتُحسب كأنها من أربعة.'},
-  taarif:{n:'أل التعريف',hook:'word',d:'كل كلمة تُحسب كأن فيها «ال»: +١ مضاعف، وطولها +١.'},
+  /* --- the row --- */
+  rihab:{n:'الرِّحاب',hook:'row',d:'السطر يقبل أربعة أصول لا ثلاثة: الجذور الرباعية في متناولك.'},
+  rabi:{n:'السطر الرابع',hook:'row',d:'سطر رابع تحت الثلاثة — لكنك لا ترى البطاقة التالية.'},
+  qalam:{n:'القلم المكسور',hook:'row',path:'chain',d:'السطور لا تنكسر: السطر الميت يصير حشوًا تمسحه مقابل ٣ نقاط لكل بطاقة.'},
+  tufayli:{n:'الطُّفَيْلي',hook:'row',d:'البطاقة التي كانت ستكسر سطرًا تقفز إلى أول سطر يقبلها.'},
 
-  /* --- seal: what it costs and what it pays --- */
-  miqass:{n:'المِقَصّ',hook:'seal',d:'الختم يشطب نصف حروف الكلمة من الكومة فقط.'},
-  khayt:{n:'خيط الحبر',hook:'seal',path:'chain',d:'ختم كلمة يختم تلقائيًا كل سطر آخر فيه كلمة مكتملة.'},
+  /* --- seal --- */
+  miqass:{n:'المِقَصّ',hook:'seal',d:'الختم يشطب نصف بطاقات الكلمة من الكومة فقط.'},
   midad:{n:'المِداد',hook:'seal',path:'pattern',d:'إن جاءت كلمتك على وزن الجولة، رُدَّ إليك الختم.'},
+  khayt:{n:'خيط الحبر',hook:'seal',path:'chain',d:'ختم كلمة يختم تلقائيًا كل سطر آخر فيه كلمة مكتملة.'},
   raha:{n:'حجر الرحى',hook:'seal',path:'chain',d:'كل سطر تخسره — كسرًا أو حشوًا — يمنحك +٠٫٥ مضاعف دائم.'},
   misann:{n:'المِسَنّ',hook:'seal',d:'كل ختم يردّ شحنة واحدة إلى كل أداة تملكها.'},
 
-  /* --- score & the two Arabic axes --- */
-  mihbara:{n:'المِحْبَرة',hook:'score',path:'root',d:'خانة زائدة في الدفتر، وجذور الدفتر تكسب الخبرة مضاعفة.'},
-  jami:{n:'جامع الأوزان',hook:'score',path:'pattern',d:'أول كلمة تختمها على كل وزن مختلف: +٠٫٥ مضاعف دائم.'},
-  ishtiqaq:{n:'الاشتقاق',hook:'score',path:'root',d:'كلمة من جذر ختمته في هذه الجولة: ×٢ فوق الرنين.'},
+  /* --- score --- */
   wazzan:{n:'الوزّان',hook:'score',path:'pattern',d:'مكافأة الوزن تُحسب مرتين.'},
-  yatim:{n:'اليتيم',hook:'score',path:'bag',d:'إذا كان في كيسك سبعة حروف أو أقل: كل كلمة ×٣.'},
-  nasikh:{n:'الناسخ',hook:'score',path:'bag',d:'بعد كل ختم تُنسخ أغلى حروف الكلمة إلى كيسك (يتسع حتى ١٣).'},
+  jami:{n:'جامع الأوزان',hook:'score',path:'pattern',d:'أول كلمة على كل وزن مختلف: +٠٫٥ مضاعف دائم.'},
+  yatim:{n:'اليتيم',hook:'score',path:'bag',d:'إذا كان في كيسك ثلاثة جذور أو أقل: كل كلمة ×٣.'},
 };
 
-/* ================= الأدوات — TOOLS =================
-   The category the game was missing. A relic fires on its own; a tool fires when *you*
-   spend a charge, and charges reset each round. This is the only place the player can
-   answer a bad letter with anything but "which row hurts least" — Sid Meier's decision
-   needs an option, and burning was the only one.
-   `use` names the verb game.ts implements; `ch` is charges per round. */
+/* ================= الأدوات — TOOLS ================= */
 export const TOOLS={
-  naqta:{n:'النُّقْطة',use:'fam',ch:3,d:'حوّل الحرف داخل عائلة نقطه: ب ← ت ← ث ← ن ← ي…'},
-  hamza:{n:'الهَمْزة',use:'hamza',ch:2,d:'حوّل الحرف الحالي إلى «ء». الهمزة تسدّ كل مقاعدها.'},
-  madda:{n:'المَدّة',use:'vowel',ch:3,d:'حوّل الحرف الحالي إلى ا أو و أو ي.'},
-  mibrat:{n:'المِبْراة',use:'shave',ch:2,d:'احذف آخر حرف من أي سطر.'},
-  mirat:{n:'المِرْآة',use:'flip',ch:1,d:'اقلب ترتيب حروف سطر كاملًا.'},
+  naqta:{n:'النُّقْطة',use:'fam',ch:3,d:'حوّل الأصل في يدك داخل عائلة نقطه: ب ← ت ← ث ← ن ← ي…'},
+  mirat:{n:'المِرْآة',use:'flip',ch:2,d:'اقلب ترتيب الأصول في سطر — لعلّ المقلوب جذر.'},
+  mibrat:{n:'المِبْراة',use:'shave',ch:2,d:'انزع آخر بطاقة وُضعت في سطر.'},
+  mifakk:{n:'المِفَكّ',use:'unhook',ch:2,d:'انزع زيادة من سطر وأعدها إلى كومتك.'},
   isfinja:{n:'الإسْفِنْجة',use:'wipe',ch:1,d:'امسح سطرًا كاملًا: لا كسر، ولا ختم يُنفق.'},
-  raml:{n:'الرَّمْل',use:'redraw',ch:2,d:'أعد الحرف الحالي إلى الكومة واسحب غيره.'},
-  kaff:{n:'الكَفّ',use:'hold',ch:2,d:'احتفظ بالحرف الحالي جانبًا، وأنزله متى شئت.'},
+  raml:{n:'الرَّمْل',use:'redraw',ch:2,d:'أعد البطاقة التي في يدك إلى الكومة واسحب غيرها.'},
+  kaff:{n:'الكَفّ',use:'hold',ch:2,d:'احتفظ بالبطاقة جانبًا، وأنزلها متى شئت.'},
+  madda:{n:'المَدّة',use:'vowel',ch:3,d:'حوّل الأصل في يدك إلى ا أو و أو ي.'},
 };
 
-/* ================= السطور — ROW INSCRIPTIONS =================
-   A row is not just a ceiling. Inscribing one makes "which row?" a question about the
-   word you intend, not the word you have. */
+/* ================= السطور — ROW INSCRIPTIONS ================= */
 export const ROWMODS={
   double:{n:'المُضاعِف',d:'كل كلمة تُختم في هذا السطر ×٢.'},
-  short:{n:'القِصار',d:'الكلمات من ثلاثة أحرف أو أقل هنا ×٤.'},
-  long:{n:'الطِّوال',d:'الكلمات من خمسة أحرف فأكثر هنا ×٣.'},
-  gold:{n:'الذَّهَب',path:'bag',d:'+٣ دنانير عن كل ختم في هذا السطر.'},
-  fort:{n:'الحِصن',path:'chain',d:'هذا السطر لا ينكسر: الحرف الذي يقتله يرتدّ ويضيع وحده.'},
-  echo:{n:'الصَّدى',path:'chain',d:'بعد الختم يحتفظ السطر بآخر حرف من الكلمة ليبدأ به.'},
   mizan:{n:'المِيزان',path:'pattern',d:'وزن الجولة يدفع هنا ×٣ بدل ×٢.'},
   manbat:{n:'المَنْبَت',path:'root',d:'كلمة من جذر في دفترك تُختم هنا ×٣.'},
+  ziyada:{n:'الزِّيادة',path:'pattern',d:'كل بطاقة زيادة في هذا السطر +٢ مضاعف.'},
+  usul:{n:'الأُصول',path:'root',d:'بطاقات الأصول هنا تُحسب بضعف قيمتها.'},
+  tawil:{n:'الطِّوال',d:'الكلمة من ستة أحرف فأكثر هنا ×٣.'},
+  gold:{n:'الذَّهَب',path:'bag',d:'+٣ دنانير عن كل ختم في هذا السطر.'},
+  fort:{n:'الحِصن',path:'chain',d:'هذا السطر لا ينكسر: البطاقة التي تقتله ترتدّ وتضيع وحدها.'},
 };
 
-/* ================= الوسوم — LETTER MARKS =================
-   A mark rides one letter for the rest of the run, so it is a bag decision, not a round
-   decision: مِرْساة and طَليق both argue with the new letter economy rather than ignoring it. */
+/* ================= الوسوم — CARD MARKS ================= */
 export const ENCH={
-  gold:{n:'ذهبي',d:'نقاط هذا الحرف ×٣.'},
-  glass:{n:'زجاجي',d:'الكلمة ×٢، ثم ينكسر ويخرج من كيسك.'},
-  ink:{n:'حِبْر',d:'يتحول تلقائيًا إلى أنسب حرف من عائلته (ب ت ث ن ي…).'},
-  echo:{n:'صَدى',d:'عند إسقاطه تأتيك نسخة منه فورًا.'},
-  free:{n:'طَليق',d:'لا يُشطب من كومة الجولة عند الختم — يسقط مرة أخرى.'},
-  anchor:{n:'مِرْساة',d:'السطر الذي فيه هذا الحرف لا ينكسر.'},
-  seed:{n:'بَذْرة',d:'إن كان حرفًا أصليًا (لا زائدة): كلمته ×٢.'},
-  heavy:{n:'مُثْقَل',d:'يُحسب حرفين في طول الكلمة، فيبلغ بها الأوزان الطويلة.'},
+  gold:{n:'ذهبي',d:'قيمة هذه البطاقة ×٣.'},
+  free:{n:'طَليق',d:'لا تُشطب من كومة الجولة عند الختم — تسقط مرة أخرى.'},
+  echo:{n:'صَدى',d:'عند إسقاطها تأتيك نسخة منها فورًا.'},
+  anchor:{n:'مِرْساة',d:'السطر الذي فيه هذه البطاقة لا ينكسر.'},
+  glass:{n:'زجاجي',d:'الكلمة ×٢، ثم تنكسر البطاقة وتخرج من كيسك.'},
+  seed:{n:'بَذْرة',d:'إن كانت أصلًا: قيمتها ×٢ ومضاعف كلمتها +١.'},
 };
 
-/* ================= المُؤتلِفات — COMBOS =================
-   Hades names its duo boons, and that is most of why its builds feel like builds: a
-   synergy nobody can see is not a synergy, it is a coincidence. Each entry is a pair (or
-   trio) that is worth more than its parts, named so the player can aim at it.
-
-   Ids are namespaced because a combo crosses categories — that crossing is the point:
-   `char:` `relic:` `tool:` `row:` `mark:`. The shop reads this table to bias its offers
-   toward whatever you are one piece away from, so a build you start is a build you can
-   finish instead of one the shuffle has to hand you. */
+/* ================= المُؤتلِفات — COMBOS ================= */
 export const COMBOS=[
-  {n:'الحرف المشدَّد', parts:['relic:shadd','mark:echo'],
-   d:'الصدى يعيدك بنسخة من الحرف، فتضعه بجوار نفسه، والمُشدِّد يحسب المتجاورَين أربع مرات.'},
-  {n:'نقطة على نقطة', parts:['relic:shadd','tool:naqta'],
-   d:'تنقل النقطة حتى يطابق الحرفُ جارَه، فتصنع الشدّة بيدك بدل أن تنتظرها.'},
+  {n:'الوزن الكامل', parts:['relic:mushtaqq','relic:sarfi'],
+   d:'كل زيادة +١ مضاعف، وثلاث زوائد ×٣: كلما أطلت الكلمة تضاعف العائد مرتين.'},
+  {n:'خزانة الزوائد', parts:['char:shair','relic:zaida'],
+   d:'الشاعر يضاعف سقوط الزوائد والزائدة تضاعفه ثانية: كومة زوائد لا تكاد تنقطع.'},
+  {n:'المِلحاق', parts:['relic:mulhaq','relic:sarfi'],
+   d:'تضع الزيادة في أي خانة، فتبلغ الثلاث زوائد على أي جذر شئت.'},
   {n:'الطاحونة', parts:['relic:qalam','relic:raha'],
    d:'السطر لا ينكسر بل يصير حشوًا، والرحى تدفع عن كل خراب: الخسارة صارت محرّكًا.'},
-  {n:'الميزان المذهَّب', parts:['char:nahwi','row:mizan'],
-   d:'وزن الجولة ×٣ عند النحوي و×٣ في سطر الميزان — والوزّان يضاعفهما.'},
+  {n:'المرآتان', parts:['relic:qalb','tool:mirat'],
+   d:'القلب يقبل أي ترتيب يكوّن جذرًا، والمرآة تقلب السطر لتبلغه.'},
+  {n:'الميزان المذهَّب', parts:['row:mizan','relic:wazzan'],
+   d:'وزن الجولة ×٣ في السطر و×٢ بالوزّان: الطلب الواحد يدفع ستة أضعاف.'},
   {n:'مِداد لا ينفد', parts:['relic:midad','row:mizan'],
    d:'الوزن يدفع ×٣ ويردّ الختم: على هذا السطر تختم بلا أن تُنقص حصّتك.'},
-  {n:'الكيس الأعزل', parts:['char:badawi','relic:yatim'],
-   d:'ثمانية حروف ثم سبعة: ×١٫٥ للبدوي و×٣ لليتيم على كل كلمة.'},
   {n:'الجذر الراسخ', parts:['relic:ishtiqaq','mark:free'],
-   d:'الحرف الطليق لا يُشطب من الكومة فيعود إليك، فتكرّر الجذر نفسه والاشتقاق يضاعفه.'},
-  {n:'الدفتر العميق', parts:['char:mujami','relic:mihbara'],
-   d:'ست خانات في الدفتر، والخبرة مضاعفة مرتين: جذورك ترتقي أسرع مما تُنسى.'},
+   d:'البطاقة الطليقة لا تُشطب فتعود إليك، فتكرّر الجذر نفسه والاشتقاق يضاعفه.'},
   {n:'المَنْبَت', parts:['relic:ablind','row:manbat'],
-   d:'الجذر الأعمى يجعل كل جذر كأنه في دفترك، وسطر المنبت يضاعف ما في الدفتر ×٣.'},
-  {n:'صَرْف العملة', parts:['char:sarraf','row:gold'],
-   d:'كل ختم في سطر الذهب يموّل أكثر من نصف ختم جديد: الأختام تصير دخلًا.'},
-  {n:'المدّ الطويل', parts:['mark:heavy','row:long'],
-   d:'المُثقَل يُحسب حرفين، فيبلغ بكلمتك سقف الطِوال وأنت تملك حروفًا أقل.'},
-  {n:'المرآتان', parts:['relic:qalb','tool:mirat'],
-   d:'القلب يقبل المقلوب، والمرآة تقلب السطر فتختار أي الوجهين يُحتسب.'},
+   d:'كل جذر صار في دفترك، وسطر المنبت يضاعف ما في الدفتر ×٣.'},
+  {n:'الكيس الأعزل', parts:['relic:yatim','relic:khamis'],
+   d:'مفارقة مقصودة: الجذر الخامس يكسر شرط اليتيم — لا تشترِ الاثنين.', anti:true},
+  {n:'صَرْف العملة', parts:['char:tajir','row:gold'],
+   d:'كل زيادة دينار وكل ختم ثلاثة: التاجر يشتري أختامه من كلماته.'},
+  {n:'الدفتر العميق', parts:['relic:mihbara','row:manbat'],
+   d:'خانة زائدة وخبرة مضاعفة، وسطر يضاعف ما في الدفتر ×٣.'},
   {n:'السِّنان', parts:['relic:misann','tool:isfinja'],
-   d:'الإسفنجة شحنة واحدة في الجولة، والمِسَنّ يردّها مع كل ختم: امسح ما شئت.'},
+   d:'الإسفنجة شحنة واحدة، والمِسَنّ يردّها مع كل ختم: امسح ما شئت.'},
   {n:'الرماد الحارق', parts:['relic:ramad','relic:ghirbal'],
-   d:'خمس حرقات في الجولة، وكل محروق يُضاف إلى الختم التالي: الحرق صار ادّخارًا.'},
-  {n:'الخابية المقصوصة', parts:['relic:khabiya','relic:miqass'],
-   d:'كومة أطول بنسخة، وختم يشطب نصف ما يشطب: الجولة تطول مرتين.'},
+   d:'خمس حرقات، وكل محروق يُضاف إلى الختم التالي: الحرق صار ادّخارًا.'},
   {n:'القُرعة المحفوظة', parts:['relic:qura','tool:kaff'],
-   d:'تبدأ الجولة بأغلى حروفك، والكفّ يحفظه حتى يجيء السطر الذي يستحقه.'},
+   d:'تبدأ الجولة بأغلى بطاقاتك، والكفّ يحفظها حتى يجيء السطر الذي يستحقها.'},
+  {n:'الرباعي', parts:['relic:rihab','relic:qalb'],
+   d:'أربعة أصول في السطر وأي ترتيب يُقبل: الجذور الرباعية كلها مفتوحة.'},
 ];
-/* which ids a run currently owns, in the namespaced form COMBOS uses */
 export const ownedIds=S=>{
   const o=['char:'+S.charId];
   for(const r of S.relics) o.push('relic:'+r);
   for(const t of Object.keys(S.tools||{})) o.push('tool:'+t);
   for(const m of S.rowMods) if(m) o.push('row:'+m);
-  for(const t of S.bag) if(t.ench) o.push('mark:'+t.ench);
+  for(const c of S.bag) if(c.ench) o.push('mark:'+c.ench);
   return new Set(o);
 };
 
 export const BOSSES={
-  blind:{n:'الكاتب الأعمى',d:'لا ترى الحرف التالي.'},
-  termite:{n:'الأرَضة',d:'كل ٤ إسقاطات تأكل أول حرف من أطول سطر. إن صار السطر بلا كلمة ممكنة ينكسر.'},
-  dry:{n:'الحبر الجاف',d:'السطر الذي تختم فيه يجف ولا يقبل حروفًا لإسقاطتين.'},
+  blind:{n:'الكاتب الأعمى',d:'لا ترى البطاقة التالية.'},
+  termite:{n:'الأرَضة',d:'كل ٦ إسقاطات تأكل أول بطاقة من أطول سطر.'},
+  dry:{n:'الحبر الجاف',d:'السطر الذي تختم فيه يجف ولا يقبل بطاقات لإسقاطة.'},
   rhyme:{n:'القافية',d:'كل كلمة يجب أن تبدأ بآخر حرف من الكلمة السابقة، وإلا فنصف النقاط.'},
-  weight:{n:'الثِّقل',d:'كل سطر يبدأ الجولة وفيه حرف غريب لا يمكن إزالته إلا بالختم.'},
-  rush:{n:'المستعجل',d:'٥ ثوانٍ لكل حرف، وإلا احترق وضاعت إسقاطته.'},
+  barren:{n:'القحط',d:'بطاقات الزيادة لا تسقط في هذه الجولة: الجذور وحدها.'},
+  rush:{n:'المستعجل',d:'٥ ثوانٍ لكل بطاقة، وإلا احترقت وضاعت إسقاطتها.'},
 };
 
 /* ================= PATHS (BUILDS) =================
-   Four recognizable strategies, each measured from what the player already owns
-   (no separate pick-a-build screen). Each gives a *multiplicative* bonus on the
-   words that match it, stacking with resonance/chain/row-mods rather than just
-   adding into the flat mult — this is what makes committing to one feel worth it. */
+   Four strategies, each measured live from what the run already owns. Retuned for the card
+   game: الوزن now counts زوائد because affixes ARE the wazn, and الكيس counts roots rather
+   than loose letters because the bag is roots now. */
 export const PATHS=[
   {id:'root',n:'الجذر',c:'var(--glaze)',
-    d:'كل مستوى في دفترك يرفع هذا المسار. كلمات من جذور الدفتر تكسب مضاعفًا يكبر معه.',
-    progress:(S,has)=>S.notebook.reduce((a,x)=>a+x.lvl,0)+(has('mihbara')?3:0),
+    d:'مستويات دفترك ترفع هذا المسار. كلمة من جذر في الدفتر تكسب مضاعفًا يكبر معه.',
+    progress:(S,has)=>S.notebook.reduce((a,x)=>a+x.lvl,0)+(has('mihbara')?3:0)+(has('ablind')?3:0)+(has('ishtiqaq')?2:0),
     match:ctx=>!!ctx.nb},
   {id:'pattern',n:'الوزن',c:'var(--saffron)',
-    d:'كل رفع وزن تشتريه يرفع هذا المسار. أي كلمة على وزن معروف تكسب مضاعفًا يكبر معه.',
-    progress:(S,has)=>(Object.values(S.patLv) as number[]).reduce((a,l)=>a+Math.max(0,l-1),0)+(has('wazzan')?3:0)+(has('jami')?3:0),
-    match:ctx=>!!ctx.p},
+    d:'الزوائد التي تجمعها ترفع هذا المسار. كل كلمة فيها زيادة تكسب مضاعفًا يكبر معه.',
+    progress:(S,has)=>S.bag.filter(c=>c.k==='a').length+(has('mushtaqq')?3:0)+(has('sarfi')?3:0)+(has('zaida')?2:0)+(has('mulhaq')?2:0),
+    match:ctx=>ctx.naff>0},
   {id:'chain',n:'السلسلة',c:'var(--crack)',
-    d:'أعلى سلسلة بلغتها هذه الرحلة ترفع هذا المسار. كلمة تختمها وأنت في سلسلة تكسب مضاعفًا يكبر معه.',
+    d:'أعلى سلسلة بلغتها ترفع هذا المسار. كلمة تختمها وأنت في سلسلة تكسب مضاعفًا يكبر معه.',
     progress:(S,has)=>(S.stats.maxChain||0)+(has('qalam')?3:0)+(has('khayt')?3:0)+(has('raha')?2:0),
     match:ctx=>ctx.chain>=2},
   {id:'bag',n:'الكيس',c:'var(--violet)',
-    d:'حروف منقوشة وكيس صغير يرفعان هذا المسار. كلمة فيها حرف منقوش، أو كيس ٧ حروف فأقل، تكسب مضاعفًا يكبر معه.',
-    progress:(S,has)=>S.bag.filter(t=>t.ench).length*2+(S.bag.length<=7?4:0)+(has('nasikh')?2:0)+(has('yatim')?3:0)+(has('khabiya')?2:0)+(has('qura')?2:0),
+    d:'البطاقات المنقوشة وقلّة الجذور ترفعان هذا المسار.',
+    progress:(S,has)=>S.bag.filter(c=>c.ench).length*2+(S.roots.length<=3?4:0)+(has('yatim')?3:0)+(has('khabiya')?2:0)+(has('qura')?2:0),
     match:ctx=>ctx.bagFlavor},
 ];
 export const pathLvl=p=>Math.min(5,Math.floor(p/3));
