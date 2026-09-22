@@ -261,7 +261,7 @@ function drop(i,atStart){
   }
   S.drops=Math.max(0,S.draw.length+(S.next?1:0)+(S.cur?1:0)-1); S.dropCount++;
   for(let k=0;k<4;k++) if(S.lock[k]>0) S.lock[k]--;
-  if(S.boss&&S.boss.id==='termite'&&S.dropCount%4===0) termite();
+  if(S.boss&&S.boss.id==='termite'&&S.dropCount%6===0) termite();
   advance(tile);
   if(!S.cur||S.seals<=0) endOfDrops(); else render();
 }
@@ -376,7 +376,7 @@ function seal(i,auto){
   if(gone) floatAt(i,{bad:true,text:`أُنفق ${gone} من حروف الجولة`});
   S.lines[i]=[]; fx={line:i,kind:'sealed'};
   if(S.rowMods[i]==='echo') S.lines[i]=[{id:null,ch:s[s.length-1],ench:null}];
-  if(S.boss&&S.boss.id==='dry') S.lock[i]=2;
+  if(S.boss&&S.boss.id==='dry') S.lock[i]=1;
   S.log.unshift({w:displayOf(s),sc:r.score}); S.log=S.log.slice(0,6);
   floatAt(i,{score:r.score,eq:r.chips+' × '+fmt(r.mult),tags:r.tags});
   audio('seal',S.chain); try{navigator.vibrate&&navigator.vibrate(18)}catch(e){}

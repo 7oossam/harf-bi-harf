@@ -9,11 +9,15 @@ export const LENB=[0,0,2,10,20,35,55,80,110];
 /* Rescaled for the seal budget. The old ladder was written for 20 drops and unlimited
    seals; with five seals on a pile that shrinks as you spell, a round yields a fraction of
    what it used to. Measured with tools/bot.mjs, not guessed.
-   The shape matters as much as the numbers: rounds 1-3 sit well under what a careless run
+   The shape matters as much as the numbers: rounds 1-2 sit well under what a careless run
    scores, because that is before any build exists and a roguelike that kills you on round
    one has no run to speak of. The ladder bites from round 4, once the shop has had three
    passes to give you something to compound. */
-export const TARGETS=[100,150,210,300,420,560,720,900];
+/* Boss rounds (3, 6, 8) dip BELOW the trend on purpose. Measured: the median round-2 score
+   is ~296 and the median round-3 score ~166 — a boss roughly halves your output. Charging a
+   higher target on top of that is charging twice for the same difficulty, and it killed six
+   of eight runs at round 3 exactly. The boss IS the round's difficulty; the number steps back. */
+export const TARGETS=[100,150,175,300,420,470,720,760];
 export const BOSS_ROUNDS=[3,6,8];
 export const DROPS=20, BURNS=3, LINE_MAX=8, BAG_CAP=10, NB_SLOTS=3;
 /* Each row has its own ceiling, so "which row?" is a real choice from the first drop:
