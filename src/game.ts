@@ -560,7 +560,14 @@ function genOffers(){
   shuffle(matched); shuffle(other);
   const relicPool=front(lead?[...matched,...other]:shuffle(pool),'relic');
   const o:any[]=relicPool.slice(0,2).map(r=>({k:'relic',id:r,cost:6,path:RELICS[r].path}));
-  o.push({k:'affix',id:front(AFFIX_IDS,'affix')[0],cost:4});
+  /* Two زوائد every shop, at 2 gold. The affix is the progression — the word gets longer
+     because you bought the thing that lengthens it — so it has to be the cheap, frequent
+     purchase, with relics as the expensive rare ones. Measured before this: the run reached
+     round 4 owning ONE affix card while the target had tripled, so scores stayed flat at
+     ~250 and the score/target ratio decayed 2.5 → 1.4 → 1.3 → 0.9 → 0.6 in every run. */
+  const apool=front(AFFIX_IDS,'affix');
+  o.push({k:'affix',id:apool[0],cost:2});
+  o.push({k:'affix',id:apool[1]||apool[0],cost:2});
   if(has('khamis')&&S.roots.length<6) o.push({k:'root',id:pick(fertileRoots(60).filter(r=>!S.roots.includes(r)).slice(0,40)),cost:7});
   const rid=front(Object.keys(ROWMODS),'row')[0];
   o.push({k:'row',id:rid,cost:4,path:ROWMODS[rid].path});
@@ -580,7 +587,13 @@ function buy(idx){
   else if(o.k==='nbup'){ const nb=nbOf(o.root); if(nb) nb.lvl++; pay(o); pathFeedback('root'); }
   else if(o.k==='patup'){ S.patLv[o.id]=(S.patLv[o.id]||1)+1; pay(o); pathFeedback('pattern'); }
   else if(o.k==='ench') S.picker={mode:'ench',ench:o.id,idx};
-  else if(o.k==='affix'){ S.bag.push({id:uid++,k:'a',a:o.id,ench:null}); pay(o); pathFeedback('pattern'); toast(`<b>${AFFIX[o.id].n}</b> — ${AFFIX[o.id].d}`); }
+  else if(o.k==='affix'){
+    /* Two cards per buy, so one purchase is felt in the pile rather than diluted by COPIES. */
+    S.bag.push({id:uid++,k:'a',a:o.id,ench:null});
+    S.bag.push({id:uid++,k:'a',a:o.id,ench:null});
+    pay(o); pathFeedback('pattern');
+    toast(`<b>${AFFIX[o.id].n} «${AFFIX[o.id].t}»</b> — ${AFFIX[o.id].d}`);
+  }
   else if(o.k==='root'){ S.roots.push(o.id); for(const ch of o.id) S.bag.push({id:uid++,k:'r',ch,root:o.id,ench:null}); if(S.notebook.length<nbSlots()) S.notebook.push({root:o.id,lvl:1,xp:0}); pay(o); pathFeedback('root'); toast(`دخل الجذر <b>${spaced(o.id)}</b> كيسك`); }
   else if(o.k==='row') S.picker={mode:'row',mod:o.id,idx};
   else if(o.k==='tool'){ S.tools[o.id]=1; S.charges[o.id]=TOOLS[o.id].ch; pay(o); toast(`<b>${TOOLS[o.id].n}</b> — ${TOOLS[o.id].d}`); }
