@@ -1,5 +1,5 @@
 import { loadDict, norm, IDX, DISP, ROOTS, SORTED, isAlive, isWord, hasAl, displayOf, rootOf, spaced } from './dict';
-import { VAL, LETTERS, FAM, famOf, LENB, TARGETS, BOSS_ROUNDS, DROPS, BURNS, LINE_MAX, LINE_CAPS, ZAWAID, COPIES, SEALS, BAG_CAP, NB_SLOTS, STARTERS, PATTERNS, patOf, RELICS, ROWMODS, BOSSES, ENCH, PATHS, pathLvl } from './data';
+import { VAL, LETTERS, FAM, famOf, LENB, TARGETS, BOSS_ROUNDS, DROPS, BURNS, LINE_MAX, LINE_CAPS, ZAWAID, COPIES, SEALS, BAG_CAP, NB_SLOTS, STARTERS, CHARS, TOOLS, PATTERNS, patOf, RELICS, ROWMODS, BOSSES, ENCH, PATHS, pathLvl } from './data';
 
 /* ================= STATE ================= */
 let S=null, uid=1;
@@ -7,17 +7,27 @@ const rnd=n=>Math.floor(Math.random()*n);
 const pick=a=>a[rnd(a.length)];
 const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=rnd(i+1);[a[i],a[j]]=[a[j],a[i]];}return a;};
 const has=id=>S.relics.includes(id);
-const nLines=()=>has('fourth')?4:3;
-const bagCap=()=>has('nasikh')?13:BAG_CAP;
-const nbSlots=()=>has('inkwell')?4:NB_SLOTS;
-const lineMax=i=>LINE_CAPS[i]??LINE_MAX;
+const chr=()=>CHARS.find(c=>c.id===S.charId)||CHARS[0];
+const isChar=id=>S.charId===id;
+const hasTool=id=>!!S.tools[id];
+const nLines=()=>has('rabi')?4:3;
+const bagCap=()=>isChar('badawi')?8:has('nasikh')?13:BAG_CAP;
+const nbSlots=()=>NB_SLOTS+(has('mihbara')?1:0)+(isChar('mujami')?2:0);
+/* الرِّحاب raises every ceiling; the caps themselves stay the reason rows differ. */
+const lineMax=i=>(LINE_CAPS[i]??LINE_MAX)+(has('rihab')?2:0);
+const sealsFor=()=>chr().seals+(has('ghirbal')?0:0);
 /* The round's pile: every letter twice, shuffled, and it never refills. This is the rack. */
-const freshPile=()=>{const ids=[]; for(let c=0;c<COPIES;c++) for(const t of S.bag) ids.push(t.id); return shuffle(ids);};
+const freshPile=()=>{const n=COPIES+(has('khabiya')?1:0); const ids=[]; for(let c=0;c<n;c++) for(const t of S.bag) ids.push(t.id); return shuffle(ids);};
 /* Sealing strikes the word's letters out of what is still to fall — Scrabble's "leave".
    A long word scores more and costs you more of your own round. */
 function spendLetters(tiles){
   let gone=0;
+  /* المِقَصّ pays half the leave; a طَليق letter is never struck at all. */
+  let budget=has('miqass')?Math.ceil(tiles.length/2):tiles.length;
   for(const t of tiles){
+    if(budget<=0) break;
+    if(t.ench==='free') continue;
+    budget--;
     const k=S.draw.findIndex(id=>{const b=S.bag.find(x=>x.id===id); return b&&b.ch===t.ch;});
     if(k>=0){ S.draw.splice(k,1); gone++; }
   }
@@ -37,9 +47,11 @@ function pathFeedback(id){
 }
 
 function newRun(starter){
-  const st=STARTERS.find(x=>x.id===starter);
-  S={phase:'intro',round:1,gold:4,bag:[...st.letters].map(ch=>({id:uid++,ch,ench:null})),relics:[],
-     rowMods:[null,null,null,null],notebook:[{root:st.root,lvl:1,xp:0}],patLv:{},permMult:0,seenRoots:{},seenPatterns:{},
+  const st=CHARS.find(x=>x.id===starter)||CHARS[0];
+  const nb=[{root:st.root,lvl:1,xp:0}];
+  if(st.nb>1) nb.push({root:'علم',lvl:1,xp:0});
+  S={phase:'intro',round:1,gold:st.gold,bag:[...st.letters].map(ch=>({id:uid++,ch,ench:null})),relics:[],tools:{},
+     charId:st.id,rowMods:[null,null,null,null],notebook:nb,patLv:{},permMult:0,seenRoots:{},seenPatterns:{},
      burnsMax:BURNS,dropsMax:DROPS,stats:{words:0,best:null,total:0,maxChain:0},mute:S?S.mute:false,starter:st.n};
   startRound();
 }
@@ -47,9 +59,17 @@ function startRound(){
   const r=S.round;
   Object.assign(S,{target:TARGETS[r-1],score:0,drops:S.dropsMax,burns:S.burnsMax,
     lines:[[],[],[],[]],junk:[false,false,false,false],lock:[0,0,0,0],fixed:[0,0,0,0],chain:0,sealedSinceDrop:true,
-    rootCounts:{},roundRoots:{},lastEnd:null,dotUses:3,dropCount:0,log:[],top:[],
-    draw:[],seals:SEALS,boss:null,wazn:pick(PATTERNS.filter(p=>p.id!=='thulathi')).id,phase:'intro',shop:null,picker:null,nbOffer:null});
+    rootCounts:{},roundRoots:{},lastEnd:null,dropCount:0,log:[],top:[],held:null,freeSeal:isChar('warraq'),
+    draw:[],seals:sealsFor(),boss:null,wazn:pick(PATTERNS.filter(p=>p.id!=='thulathi')).id,phase:'intro',shop:null,picker:null,nbOffer:null});
   S.draw=freshPile(); S.drops=S.draw.length;
+  S.charges={}; for(const k of Object.keys(S.tools)) S.charges[k]=TOOLS[k].ch;   // tools recharge every round
+  S.burns=BURNS+(has('ghirbal')?2:0); S.burnsMax=S.burns;
+  /* القُرْعة: open on your best letter instead of whatever the shuffle gave you. */
+  if(has('qura')&&S.draw.length){
+    let bi=-1,bv=-1;
+    for(let k=0;k<S.draw.length;k++){const t=S.bag.find(b=>b.id===S.draw[k]); const v=t?(VAL[t.ch]||0):0; if(v>bv){bv=v;bi=k;}}
+    if(bi>=0) S.top.push({...S.bag.find(b=>b.id===S.draw[bi])}), S.draw.splice(bi,1);
+  }
   if(BOSS_ROUNDS.includes(r)){
     const pool=r===3?['blind','termite','dry']:r===6?['rhyme','weight','rush']:Object.keys(BOSSES);
     S.boss={id:pick(pool)};
@@ -66,6 +86,12 @@ function drawTile(){
   return null;
 }
 const lineStr=i=>S.lines[i].map(t=>t.ch).join('');
+/* The relics that rewrite acceptance. A word game's one lever a card game does not have:
+   القَلْب lets a row count if its mirror is a word, الشّاذّ lets a two-letter row count. */
+const rev=w=>[...w].reverse().join('');
+const wordOK=w=>isWord(w)||(has('qalb')&&w.length>=3&&isWord(rev(w)))||(has('shadh')&&w.length===2&&isWord(w));
+/* the form that actually scores — القَلْب scores the reading that is real */
+const readAs=w=>(isWord(w)||!has('qalb'))?w:(isWord(rev(w))?rev(w):w);
 function placed(i,tile,atStart){
   const L=S.lines[i];
   const put=ch=>atStart?[{...tile,ch},...L]:[...L,{...tile,ch}];
@@ -76,20 +102,41 @@ function placed(i,tile,atStart){
   }
   return put(tile.ch);
 }
+/* المَدّ — ا و ي are one family in Arabic morphology (حروف العلّة), so let the relic
+   treat them as interchangeable rather than inventing a wildcard. */
+const VOWELS=['ا','و','ي'];
+function bestVowel(i,tile,atStart){
+  if(!has('madd')||!VOWELS.includes(tile.ch)) return null;
+  for(const c of VOWELS){
+    if(c===tile.ch) continue;
+    const w=placed(i,{...tile,ch:c},atStart).map(t=>t.ch).join('');
+    if(wordOK(w)) return c;
+  }
+  for(const c of VOWELS){
+    if(c===tile.ch) continue;
+    const w=placed(i,{...tile,ch:c},atStart).map(t=>t.ch).join('');
+    if(isAlive(w)) return c;
+  }
+  return null;
+}
 function stateOf(i,tile,atStart){
   if(S.junk[i]) return 'junk';
   if(S.lock[i]>0) return 'locked';
   if(S.lines[i].length>=lineMax(i)) return 'full';
   const s=placed(i,tile,atStart).map(t=>t.ch).join('');
-  return isWord(s)?'word':isAlive(s)?'alive':'dead';
+  if(wordOK(s)) return 'word';
+  if(isAlive(s)||(has('qalb')&&isAlive(rev(s)))) return 'alive';
+  const v=bestVowel(i,tile,atStart);
+  if(v){ const w=placed(i,{...tile,ch:v},atStart).map(t=>t.ch).join(''); return wordOK(w)?'word':'alive'; }
+  return 'dead';
 }
 function hintFor(i,tile,atStart){
   if(!tile) return null;
   const st=stateOf(i,tile,atStart);
   if(st!=='dead') return st;
   if(S.rowMods[i]==='fort') return 'bounce';
-  if(has('parasite') && parasiteTarget(i,tile)!=null) return 'jump';
-  return has('pen')?'junk':'dead';
+  if(has('tufayli') && parasiteTarget(i,tile)!=null) return 'jump';
+  return has('qalam')?'junk':'dead';
 }
 function parasiteTarget(i,tile){
   const n=nLines();
@@ -115,20 +162,33 @@ function waznHint(i){
 /* ================= SCORING ================= */
 function scoreWord(tiles,s,row){
   const len=s.length, tags=[]; let chips=0, x=1;
-  for(const t of tiles){ let v=VAL[t.ch]||1; if(t.ench==='gold') v*=3; chips+=v; }
-  chips+=LENB[Math.min(len,8)];
-  let mult=1+Math.max(0,len-3);
+  for(let k=0;k<tiles.length;k++){
+    const t=tiles[k]; let v=VAL[t.ch]||1;
+    if(t.ench==='gold') v*=3;
+    /* المُشَدِّد — the شدّة is a real thing in Arabic: a doubled letter is one sound held twice. */
+    if(has('shadd')&&k>0&&tiles[k-1].ch===t.ch) v*=4;
+    if(t.ench==='seed'&&!ZAWAID.has(t.ch)) v*=2;
+    chips+=v;
+  }
+  /* مُثْقَل counts twice toward length, which is how a short bag still reaches a long وزن. */
+  const wlen=len+tiles.filter(t=>t.ench==='heavy').length;
+  chips+=LENB[Math.min(wlen,8)];
+  let mult=1+Math.max(0,wlen-3);
   const p=patOf(s);
-  if(p){ const lv=S.patLv[p.id]||1, com=p.id===S.wazn, k=(has('wazzan')?2:1)*(com?2:1);
+  if(p){ const lv=S.patLv[p.id]||1, com=p.id===S.wazn;
+    const commission=com?(S.rowMods[row]==='mizan'?3:isChar('nahwi')?3:2):1;
+    const k=(has('wazzan')?2:1)*commission;
     chips+=Math.round(p.c*(1+.5*(lv-1)))*k; mult+=(p.m+lv-1)*k; tags.push('وزن '+p.n+(lv>1?' م'+lv:''));
-    if(com) tags.push('طلب الجولة ×٢'); }
-  if(hasAl(s)){ mult+=1; tags.push('ال +١'); }
-  const root=rootOf(s), nb=nbOf(root);
-  if(nb){ chips+=5*nb.lvl; mult+=nb.lvl; tags.push('دفتر '+spaced(root)+' م'+nb.lvl); }
+    if(com) tags.push('طلب الجولة ×'+commission); }
+  if(hasAl(s)||has('taarif')){ mult+=1; tags.push(hasAl(s)?'ال +١':'أل التعريف +١'); }
+  const root=rootOf(s); let nb=nbOf(root);
+  if(!nb&&has('ablind')&&root){ nb={root,lvl:1,xp:0,blind:true}; tags.push('جذر أعمى'); }
+  if(nb){ chips+=5*nb.lvl; mult+=nb.lvl; if(!nb.blind) tags.push('دفتر '+spaced(root)+' م'+nb.lvl); }
   let add=S.permMult;
-  if(has('reader')){ const seen=Object.keys(S.seenRoots).length+(root&&!S.seenRoots[root]?1:0); add+=.25*seen; }
-  if(add>0){ mult+=add; tags.push('دائم +'+fmt(add)); }
+    if(add>0){ mult+=add; tags.push('دائم +'+fmt(add)); }
   if(root){const prev=S.rootCounts[root]||0; if(prev>0){x*=(1+prev); tags.push('رنين ×'+(1+prev));}}
+  if(has('ishtiqaq')&&root&&S.roundRoots[root]){ x*=2; tags.push('اشتقاق ×٢'); }
+  if(isChar('badawi')){ x*=1.5; tags.push('بَدَوي ×١٫٥'); }
   const bagFlavor=tiles.some(t=>t.ench)||S.bag.length<=7, pctx={nb,p,chain:S.chain,bagFlavor};
   for(const path of PATHS){
     const lv=pathLvl(path.progress(S,has));
@@ -138,9 +198,10 @@ function scoreWord(tiles,s,row){
   const glass=tiles.filter(t=>t.ench==='glass').length; if(glass){x*=2**glass; tags.push('زجاج ×'+(2**glass));}
   const mod=S.rowMods[row];
   if(mod==='double'){x*=2;tags.push('سطر مضاعف ×٢');}
-  if(mod==='short'&&len<=3){x*=3;tags.push('قِصار ×٣');}
+  if(mod==='short'&&len<=3){x*=4;tags.push('قِصار ×٤');}
+  if(mod==='manbat'&&nb&&!nb.blind){x*=3;tags.push('مَنْبَت ×٣');}
   if(mod==='long'&&len>=5){x*=3;tags.push('طِوال ×٣');}
-  if(has('orphan')&&S.bag.length<=7){x*=3;tags.push('يتيم ×٣');}
+  if(has('yatim')&&S.bag.length<=7){x*=3;tags.push('يتيم ×٣');}
   if(S.boss&&S.boss.id==='rhyme'&&S.lastEnd&&s[0]!==S.lastEnd){x*=.5;tags.push('بلا قافية ×½');}
   return {chips,mult:mult*x,score:Math.round(chips*mult*x),tags,root,pat:p?p.id:null};
 }
@@ -156,24 +217,30 @@ function canAct(){
   for(let i=0;i<nLines();i++){
     if(S.junk[i]) return true;                                  // junk takes the drop, and wipes for scrap
     if(S.lock[i]<=0&&S.lines[i].length<lineMax(i)) return true;  // row still accepts a letter
-    if(S.seals>0&&S.lines[i].length>=2&&isWord(lineStr(i))) return true;
+    if(S.seals>0&&S.lines[i].length>=2&&wordOK(lineStr(i))) return true;
   }
   return false;
 }
 function drop(i,atStart){
   if(S.phase!=='play'||i>=nLines()) return;
+  if(S.aim&&aimTool(i)) return;
   if(S.lock[i]>0){ toast('هذا السطر جافّ الآن'); return; }
   if(!S.junk[i]&&S.lines[i].length>=lineMax(i)){ toast('هذا السطر ممتلئ، اختمه أولًا'); return; }
   const tile=S.cur; audio('drop');
-  if(!S.sealedSinceDrop) S.chain=has('ember')?Math.max(0,S.chain-1):0;
+  if(!S.sealedSinceDrop) S.chain=0;
   S.sealedSinceDrop=false;
   if(S.junk[i]){ if(S.lines[i].length<lineMax(i)) S.lines[i]=[...S.lines[i],tile]; }
   else {
     const st=stateOf(i,tile,atStart);
-    if(st==='word'||st==='alive'){ S.lines[i]=placed(i,tile,atStart); fx={line:i,kind:'drop'}; }
-    else if(S.rowMods[i]==='fort'){ fx={line:i,kind:'crack'}; floatAt(i,{bad:true,text:'ارتدّ الحرف'}); }
-    else if(has('parasite') && parasiteTarget(i,tile)!=null){ const j=parasiteTarget(i,tile); S.lines[j]=placed(j,tile,false); fx={line:j,kind:'drop'}; floatAt(j,{bad:true,text:'قفز الطفيلي'}); }
-    else if(has('pen')){ S.lines[i]=[...S.lines[i],tile]; S.junk[i]=true; fx={line:i,kind:'crack'}; audio('crack'); }
+    if(st==='word'||st==='alive'){
+      let t2=tile;
+      if(has('madd')){ const base=placed(i,tile,atStart).map(x=>x.ch).join('');
+        if(!wordOK(base)&&!isAlive(base)){ const v=bestVowel(i,tile,atStart); if(v) t2={...tile,ch:v}; } }
+      S.lines[i]=placed(i,t2,atStart); fx={line:i,kind:'drop'};
+    }
+    else if(S.rowMods[i]==='fort'||S.lines[i].some(t=>t.ench==='anchor')){ fx={line:i,kind:'crack'}; floatAt(i,{bad:true,text:'ارتدّ الحرف'}); }
+    else if(has('tufayli') && parasiteTarget(i,tile)!=null){ const j=parasiteTarget(i,tile); S.lines[j]=placed(j,tile,false); fx={line:j,kind:'drop'}; floatAt(j,{bad:true,text:'قفز الطفيلي'}); }
+    else if(has('qalam')){ S.lines[i]=[...S.lines[i],tile]; S.junk[i]=true; fx={line:i,kind:'crack'}; audio('crack'); }
     else crack(i);
   }
   S.drops=Math.max(0,S.draw.length+(S.next?1:0)+(S.cur?1:0)-1); S.dropCount++;
@@ -194,21 +261,54 @@ function crack(i){
   S.score+=scrap;
   S.lines[i]=[]; S.chain=0; fx={line:i,kind:'crack'}; audio('crack');
   const tail=scrap?`، نشارة +${scrap}`:'';
-  if(has('mill')){ S.permMult+=.5; floatAt(i,{bad:true,text:'انكسر، الرحى +٠٫٥'+tail}); }
+  if(has('raha')){ S.permMult+=.5; floatAt(i,{bad:true,text:'انكسر، الرحى +٠٫٥'+tail}); }
   else floatAt(i,{bad:true,text:'انكسر السطر'+tail});
 }
 function advance(prev){
   if(prev&&prev.ench==='echo') S.cur={...prev,id:null,ench:null};
   else { S.cur=S.next; S.next=drawTile(); }
+  /* الكَفّ: whatever you set aside comes back rather than being lost with the round */
+  if(!S.cur&&S.held){ S.cur=S.held; S.held=null; }
   resetTimer();
 }
 function burn(){ if(S.phase!=='play'||S.burns<=0) return; S.burns--; audio('burn'); advance(null); render(); }
-function cycleDot(){
-  if(S.phase!=='play'||!has('dot')||S.dotUses<=0) return;
-  const f=famOf(S.cur.ch); if(!f||S.cur.ench==='ink') return;
-  S.cur={...S.cur,ch:f[(f.indexOf(S.cur.ch)+1)%f.length]}; S.dotUses--; audio('drop'); render();
+function twinSwap(){ if(S.phase!=='play'||!has('tawam')||has('rabi')) return; [S.cur,S.next]=[S.next,S.cur]; audio('drop'); render(); }
+
+/* ================= الأدوات — TOOLS =================
+   A relic fires on its own; a tool fires when you spend a charge. Charges reset every
+   round, so a tool is a budget you manage inside the round rather than a permanent edge.
+   Some act on the letter in your hand, some act on a row — `needsRow` says which, and
+   the row-takers arm a target picker instead of firing immediately. */
+const ROW_TOOLS={shave:1,flip:1,wipe:1};
+function useTool(id){
+  if(S.phase!=='play'||!hasTool(id)) return;
+  if((S.charges[id]||0)<=0){ toast('لا شحنة في '+TOOLS[id].n); return; }
+  const use=TOOLS[id].use;
+  if(ROW_TOOLS[use]){ S.aim=S.aim===id?null:id; render(); return; }   // pick a row next
+  if(!S.cur) return;
+  if(use==='fam'){
+    const f=famOf(S.cur.ch);
+    if(!f||S.cur.ench==='ink'){ toast('هذا الحرف بلا عائلة نقاط'); return; }
+    S.cur={...S.cur,ch:f[(f.indexOf(S.cur.ch)+1)%f.length]};
+  }
+  else if(use==='hamza'){ if(S.cur.ch==='ء'){ toast('هو همزة بالفعل'); return; } S.cur={...S.cur,ch:'ء'}; }
+  else if(use==='vowel'){ const i=VOWELS.indexOf(S.cur.ch); S.cur={...S.cur,ch:VOWELS[(i+1)%3]}; }
+  else if(use==='redraw'){ const t=drawTile(); if(!t){ toast('الكومة فارغة'); return; } S.draw.unshift(S.cur.id); S.cur=t; }
+  else if(use==='hold'){
+    if(S.held){ const h=S.held; S.held=S.cur; S.cur=h; }
+    else { S.held=S.cur; advance(null); }
+  }
+  S.charges[id]--; audio('drop'); render();
 }
-function twinSwap(){ if(S.phase!=='play'||!has('twin')||has('fourth')) return; [S.cur,S.next]=[S.next,S.cur]; audio('drop'); render(); }
+/* row-targeted tools resolve here, once the player names the row */
+function aimTool(i){
+  const id=S.aim; if(!id) return false;
+  const use=TOOLS[id].use, L=S.lines[i];
+  if(use==='shave'){ if(!L.length){ toast('السطر فارغ'); return true; } S.lines[i]=L.slice(0,-1); }
+  else if(use==='flip'){ if(L.length<2){ toast('لا شيء يُقلب'); return true; } S.lines[i]=[...L].reverse(); }
+  else if(use==='wipe'){ if(!L.length){ toast('السطر فارغ'); return true; } S.lines[i]=[]; S.junk[i]=false; }
+  S.charges[id]--; S.aim=null; audio('seal',0); render(); return true;
+}
 function seal(i,auto){
   if(S.phase!=='play') return;
   const tiles=S.lines[i]; if(!tiles.length) return;
@@ -221,24 +321,27 @@ function seal(i,auto){
     return afterSeal(auto);
   }
   if(S.seals<=0){ toast('لم يبق لك ختم في هذه الجولة'); return; }
-  if(!isWord(s)) return;
+  if(!wordOK(s)) return;
   const r=scoreWord(tiles,s,i);
   S.score+=r.score; S.stats.words++; S.stats.total+=r.score;
   if(!S.stats.best||r.score>S.stats.best.score) S.stats.best={w:displayOf(s),score:r.score};
   if(r.root){
     S.rootCounts[r.root]=(S.rootCounts[r.root]||0)+1; S.roundRoots[r.root]=(S.roundRoots[r.root]||0)+1; S.seenRoots[r.root]=1;
     const nb=nbOf(r.root);
-    if(nb){ nb.xp+=has('inkwell')?2:1; if(nb.xp>=3){nb.xp-=3; nb.lvl++; setTimeout(()=>toast(`ارتقى الجذر <b>${spaced(nb.root)}</b> إلى المستوى ${nb.lvl}`),700);} }
+    if(nb){ nb.xp+=has('mihbara')?2:1; if(nb.xp>=3){nb.xp-=3; nb.lvl++; setTimeout(()=>toast(`ارتقى الجذر <b>${spaced(nb.root)}</b> إلى المستوى ${nb.lvl}`),700);} }
   }
-  if(has('collector')&&r.pat&&!S.seenPatterns[r.pat]){ S.seenPatterns[r.pat]=1; S.permMult+=.5; setTimeout(()=>toast('جامع الأوزان: أول كلمة على وزن جديد · +٠٫٥ مضاعف دائم'),650); }
+  if(has('jami')&&r.pat&&!S.seenPatterns[r.pat]){ S.seenPatterns[r.pat]=1; S.permMult+=.5; setTimeout(()=>toast('جامع الأوزان: أول كلمة على وزن جديد · +٠٫٥ مضاعف دائم'),650); }
   S.chain++; S.stats.maxChain=Math.max(S.stats.maxChain||0,S.chain); S.sealedSinceDrop=true; S.lastEnd=s[s.length-1];
-  if(S.rowMods[i]==='gold') S.gold+=2;
+  if(S.rowMods[i]==='gold') S.gold+=3;
   tiles.filter(t=>t.ench==='glass'&&t.id).forEach(t=>{S.bag=S.bag.filter(b=>b.id!==t.id);});
-  if(has('ring')) S.top=[...tiles.filter(t=>!t.heavy).map(t=>({...t})),...S.top];
   if(has('nasikh')&&S.bag.length<bagCap()){ const best=tiles.filter(t=>!t.heavy).reduce((a,b)=>(VAL[b.ch]||0)>(VAL[a.ch]||0)?b:a); S.bag.push({id:uid++,ch:best.ch,ench:null}); }
-  if(has('eater')&&s.length>=5&&S.bag.length>4){ const cand=tiles.filter(t=>t.id&&S.bag.some(b=>b.id===t.id)); if(cand.length){const v=pick(cand); S.bag=S.bag.filter(b=>b.id!==v.id); S.permMult+=1; setTimeout(()=>toast(`التهم آكل الحروف «${v.ch}» · +١ مضاعف دائم`),500);} }
   const gone=spendLetters(tiles);
-  S.seals--; S.drops=S.draw.length+(S.next?1:0)+(S.cur?1:0);
+  /* Three ways a seal can come back: the copyist's first one is free, المِداد refunds a
+     word that answered the round's commission, and the money-changer buys more. */
+  if(S.freeSeal){ S.freeSeal=false; floatAt(i,{bad:false,text:'ختم الوَرّاق: مجّانًا'}); }
+  else if(has('midad')&&r.pat===S.wazn){ floatAt(i,{bad:false,text:'المِداد: رُدَّ الختم'}); }
+  else S.seals--;
+  S.drops=S.draw.length+(S.next?1:0)+(S.cur?1:0);
   if(gone) floatAt(i,{bad:true,text:`أُنفق ${gone} من حروف الجولة`});
   S.lines[i]=[]; fx={line:i,kind:'sealed'};
   if(S.rowMods[i]==='echo') S.lines[i]=[{id:null,ch:s[s.length-1],ench:null}];
@@ -246,7 +349,7 @@ function seal(i,auto){
   S.log.unshift({w:displayOf(s),sc:r.score}); S.log=S.log.slice(0,6);
   floatAt(i,{score:r.score,eq:r.chips+' × '+fmt(r.mult),tags:r.tags});
   audio('seal',S.chain); try{navigator.vibrate&&navigator.vibrate(18)}catch(e){}
-  if(has('thread')) for(let k=0;k<nLines();k++){ if(k!==i&&!S.junk[k]&&S.lines[k].length>=2&&isWord(lineStr(k))){ seal(k,true); if(S.phase!=='play') return; } }
+  if(has('khayt')) for(let k=0;k<nLines();k++){ if(k!==i&&!S.junk[k]&&S.lines[k].length>=2&&wordOK(lineStr(k))){ seal(k,true); if(S.phase!=='play') return; } }
   afterSeal(auto);
 }
 function afterSeal(auto){
@@ -258,7 +361,7 @@ function endOfDrops(){
   const n=nLines(); let k=0;
   const step=()=>{
     if(S.phase!=='ending') return;
-    while(k<n&&!(S.seals>0&&S.lines[k].length>=2&&!S.junk[k]&&isWord(lineStr(k)))) k++;
+    while(k<n&&!(S.seals>0&&S.lines[k].length>=2&&!S.junk[k]&&wordOK(lineStr(k)))) k++;
     if(k<n){ S.phase='play'; seal(k,true); if(S.phase==='play') S.phase='ending'; render(); k++; setTimeout(step,450); return; }
     if(S.score>=S.target){S.phase='won'; render(); setTimeout(winRound,700);} else { S.phase='over'; audio('lose'); render(); }
   };
@@ -296,6 +399,9 @@ function genOffers(){
   if(wantNb&&S.notebook.length){ o.push({k:'nbup',root:pick(S.notebook).root,cost:3,path:'root'}); }
   else o.push({k:'patup',id:pick(PATTERNS.filter(p=>p.id!=='thulathi')).id,cost:3,path:'pattern'});
   o.push({k:'ench',id:pick(Object.keys(ENCH)),cost:4,path:'bag'});
+  /* a tool you do not own yet — agency is worth a slot of its own every shop */
+  const tpool=Object.keys(TOOLS).filter(t=>!S.tools[t]);
+  if(tpool.length) o.push({k:'tool',id:pick(tpool),cost:5});
   return o;
 }
 function letterOpts(){
@@ -310,8 +416,9 @@ function buy(idx){
   else if(o.k==='nbup'){ const nb=nbOf(o.root); if(nb) nb.lvl++; pay(o); pathFeedback('root'); }
   else if(o.k==='patup'){ S.patLv[o.id]=(S.patLv[o.id]||1)+1; pay(o); pathFeedback('pattern'); }
   else if(o.k==='ench') S.picker={mode:'ench',ench:o.id,idx};
-  else if(o.k==='letters') S.picker={mode:'letters',idx};
+  else if(o.k==='letters'){ if(S.bag.length>=bagCap()){toast('كيسك ممتلئ');return;} S.picker={mode:'letters',idx}; }
   else if(o.k==='row') S.picker={mode:'row',mod:o.id,idx};
+  else if(o.k==='tool'){ S.tools[o.id]=1; S.charges[o.id]=TOOLS[o.id].ch; pay(o); toast(`<b>${TOOLS[o.id].n}</b> — ${TOOLS[o.id].d}`); }
   audio('drop'); render();
 }
 function pay(o){S.gold-=o.cost;o.sold=true;}
@@ -356,7 +463,7 @@ function render(){
   if(S.phase==='play'&&S.cur&&!canAct()){ endOfDrops(); return; }
   if(!S.bag){ app.innerHTML=''; renderOverlay(); return; }
   const n=nLines();
-  const hideNext=has('fourth')||(S.boss&&S.boss.id==='blind');
+  const hideNext=has('rabi')||(S.boss&&S.boss.id==='blind');
   const pct=Math.min(100,S.score/S.target*100);
   const chainM=1+.5*S.chain;
   const lead=leadingPath(), leadP=lead?PATHS.find(p=>p.id===lead):null;
@@ -370,7 +477,7 @@ function render(){
   for(let i=0;i<n;i++){
     const L=S.lines[i], s=L.map(t=>t.ch).join(''), junk=S.junk[i];
     const hint=S.phase==='play'?hintFor(i,S.cur,false):null;
-    const ok=!junk&&isWord(s);
+    const ok=!junk&&wordOK(s);
     const fxc=fx.line===i?(fx.kind==='crack'?'cracked':fx.kind==='sealed'?'sealed':''):'';
     let rootl='';
     if(ok){ const r=rootOf(s), p=patOf(s), nb=nbOf(r), c=r?S.rootCounts[r]||0:0;
@@ -380,7 +487,7 @@ function render(){
     if(ok&&s.length>=2&&S.seals>0){const p=scoreWord(L,s,i); sealBtn=`<button class="seal" data-seal="${i}">ختم<small>+${p.score}</small><small class="cost">−${s.length} حرف</small></button>`;}
     else if(junk&&L.length) sealBtn=`<button class="seal junkseal" data-seal="${i}">امسح<small>+${3*s.length}</small></button>`;
     const mod=S.rowMods[i];
-    const startHint=has('muarrib')&&S.phase==='play'&&!junk&&S.lock[i]<=0?stateOf(i,S.cur,true):null;
+    const startHint=S.phase==='play'&&!junk&&S.lock[i]<=0?stateOf(i,S.cur,true):null;
     const wh=S.phase==='play'?waznHint(i):null;
     h+=`<div class="line ${hint?'h-'+hint:''} ${junk?'junk':''} ${S.lock[i]>0?'locked':''} ${fxc}" data-line="${i}" tabindex="0" role="button" aria-label="السطر ${i+1}">
       ${startHint?`<div class="startzone" data-start="${i}"></div>`:''}
@@ -397,9 +504,13 @@ function render(){
     <div class="cur">${tileHTML(S.cur,'big')}
       <div class="enchlab">${S.cur&&S.cur.ench?ENCH[S.cur.ench].n:`<span class="pile">في الكومة ${pileN} من ${S.bag.length}</span>`}</div>
       ${S.boss&&S.boss.id==='rush'?'<div class="timer"><i style="width:100%"></i></div>':''}
-      ${has('dot')&&famOf(S.cur.ch)&&S.cur.ench!=='ink'?`<button class="dotbtn" data-act="dot" ${S.dotUses<=0?'disabled':''}>انقل النقطة (${S.dotUses})</button>`:''}</div>
-    <button class="nextwrap" data-act="twin" ${has('twin')&&!hideNext?'':'tabindex="-1"'}>${has('twin')&&!hideNext?'التالي · بدّل':'التالي'}${hideNext?tileHTML(null,'small'):tileHTML(S.next,'small')}</button>
+      ${S.held?`<button class="heldbtn" data-tool="kaff">في الكَفّ: ${S.held.ch}</button>`:''}</div>
+    <button class="nextwrap" data-act="twin" ${has('tawam')&&!hideNext?'':'tabindex="-1"'}>${has('tawam')&&!hideNext?'التالي · بدّل':'التالي'}${hideNext?tileHTML(null,'small'):tileHTML(S.next,'small')}</button>
   </div>
+  ${Object.keys(S.tools).length?`<div class="tools">${Object.keys(S.tools).map(t=>{
+    const c=S.charges[t]||0, armed=S.aim===t;
+    return `<button class="tool ${armed?'armed':''}" data-tool="${t}" ${c<=0||S.phase!=='play'?'disabled':''}>${TOOLS[t].n}<small>${c}</small></button>`;
+  }).join('')}${S.aim?'<span class="aimlab">اختر السطر…</span>':''}</div>`:''}
   <div class="foot">
     ${S.notebook.map(e=>`<span class="nb">${spaced(e.root)}<small>م${e.lvl}</small></span>`).join('')}
     ${leadP?`<button class="pathchip lead" data-path="${leadP.id}" style="--pc:${leadP.c}">مسار ${leadP.n}<b>م${pathLevelOf(lead)}</b></button>`:''}
@@ -437,7 +548,7 @@ function renderOverlay(){
       <button class="btn" data-act="starters">ابدأ الرحلة</button>
       ${best?`<p class="sub">أفضل رحلة: ${best} نقطة</p>`:''}</div>`;
   } else if(P==='starters'){
-    o=`<div class="card"><h2>اختر كيسك الأول</h2><div class="choice">${STARTERS.map(s=>`<button data-starter="${s.id}"><b>${s.n}</b><span class="letters">${[...s.letters].join(' ')}</span><span>يبدأ دفترك بجذر ${spaced(s.root)}. ${s.d}</span></button>`).join('')}</div></div>`;
+    o=`<div class="card wide"><h2>مَن تكون؟</h2><div class="choice chars">${CHARS.map(c=>`<button data-starter="${c.id}"><b>${c.n}</b><span class="rule">${c.d}</span><span class="letters">${[...c.letters].join(' ')}</span><span class="why">${c.w}</span><span class="stat">${c.seals} أختام · ${c.gold} دينار · جذر ${spaced(c.root)}</span></button>`).join('')}</div></div>`;
   } else if(P==='intro'){
     const lid=leadingPath(), lp=lid?PATHS.find(x=>x.id===lid):null;
     o=`<div class="card"><h2>الجولة ${S.round}</h2>
@@ -510,6 +621,7 @@ function offerHTML(x,i){
   let kind,nm,ds,cls='';
   if(x.k==='relic'){kind='طلسم';nm=RELICS[x.id].n;ds=RELICS[x.id].d;cls='k-relic';}
   else if(x.k==='ench'){kind='نقش حرف';nm='حرف '+ENCH[x.id].n;ds=ENCH[x.id].d+' تختار الحرف من كيسك.';}
+  else if(x.k==='tool'){kind='أداة';nm=TOOLS[x.id].n;ds=TOOLS[x.id].d+` · ${TOOLS[x.id].ch} شحنات تتجدد كل جولة.`;}
   else if(x.k==='letters'){kind='حروف';nm='حرف جديد';ds='واحد من: '+x.opts.join('، ')+(S.bag.length>=bagCap()?' (يستبدل حرفًا)':'');}
   else if(x.k==='row'){kind='نقش سطر';nm='سطر '+ROWMODS[x.id].n;ds=ROWMODS[x.id].d;cls='k-row';}
   else if(x.k==='nbup'){kind='حبر';nm='ارفع جذر '+spaced(x.root);ds='+١ مستوى لهذا الجذر في دفترك.';cls='k-up';}
@@ -549,7 +661,7 @@ function audio(kind,lvl=0){
 
 let prevPhase='play';
 document.addEventListener('click',e=>{
-  const b=e.target.closest('[data-seal],[data-act],[data-buy],[data-pick],[data-letter],[data-relic],[data-mod],[data-start],[data-line],[data-starter],[data-write],[data-replace],[data-row],[data-path]');
+  const b=e.target.closest('[data-seal],[data-act],[data-buy],[data-pick],[data-letter],[data-relic],[data-mod],[data-start],[data-line],[data-starter],[data-write],[data-replace],[data-row],[data-path],[data-tool],[data-char]');
   if(!b||!S) return;
   const D=b.dataset;
   if(D.seal!=null) return seal(+D.seal);
@@ -558,9 +670,12 @@ document.addEventListener('click',e=>{
   if(D.letter!=null) return pickLetter(D.letter);
   if(D.row!=null) return pickRow(+D.row);
   if(D.starter) { newRun(D.starter); return render(); }
+  if(D.tooltip){ const t=TOOLS[D.tooltip]; return toast(`<b>${t.n}</b> — ${t.d}`); }
   if(D.write) return writeRoot(D.write);
   if(D.replace!=null) return replaceRoot(+D.replace);
   if(D.relic){ const r=RELICS[D.relic]; return toast(`<b>${r.n}</b> — ${r.d}`); }
+  if(D.tool) return useTool(D.tool);
+  if(D.char){ const c=CHARS.find(x=>x.id===D.char); return toast(`<b>${c.n}</b> — ${c.d}`); }
   if(D.mod){ const m=ROWMODS[D.mod]; return toast(`<b>سطر ${m.n}</b> — ${m.d}`); }
   if(D.path){ const p=PATHS.find(x=>x.id===D.path), lv=pathLevelOf(D.path); return toast(`<b style="color:${p.c}">${p.n}</b>${lv>0?' · م'+lv:''} — ${p.d}`); }
   if(D.start!=null) return drop(+D.start,true);
@@ -569,7 +684,6 @@ document.addEventListener('click',e=>{
   if(a==='starters'){ S.phase='starters'; render(); }
   else if(a==='go'){ S.phase='play'; resetTimer(); render(); }
   else if(a==='burn') burn();
-  else if(a==='dot') cycleDot();
   else if(a==='twin') twinSwap();
   else if(a==='shop') openShop();
   else if(a==='next') nextRound();

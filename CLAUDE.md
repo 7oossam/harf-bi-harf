@@ -65,7 +65,7 @@ source files, which are not committed. See the header of each tool.
 ## Design state
 
 Working: the drop/seal loop, colored row hints, roots × patterns scoring, notebook roots,
-row inscriptions, 17 relics, 6 bosses, the shop, the 10-letter bag, and four named **Paths**
+row inscriptions, 25 relics, 8 tools, 5 characters, 6 bosses, the shop, the bag, and four named **Paths**
 (`PATHS` in `data.ts`) — الجذر (notebook/resonance), الوزن (patterns), السلسلة (chain), الكيس
 (bag/enchants). A path's level is computed live from what you already own (notebook levels,
 pattern levels, max chain reached, enchanted letters/small bag), not chosen from a menu. Words
@@ -100,6 +100,37 @@ often as you liked. Two scarcities fix it, taken from the two games that solve t
 
 الرسوخ was removed to make room: it weighted the draw pile, which must now deplete strictly,
 and it drifted the bag automatically, which fought the bag-building it was meant to serve.
+
+**The content categories, and why there are five.** The old set was seventeen relics that
+were almost all scoring modifiers, so no two runs felt different: a multiplier changes what
+the number says afterwards, not what you *do*. The rewrite separates content by **who decides
+and when**, which is the only axis that makes five categories five things instead of one:
+
+| table | Arabic | acts | decided by |
+|---|---|---|---|
+| `CHARS` | الكُتّاب | the whole run | you, before you know anything |
+| `RELICS` | الحُروز | on its own trigger | the game, via the shop |
+| `TOOLS` | الأدوات | when you spend a charge | **you, mid-round** |
+| `ROWMODS` | السطور | all round, one row | you, by inscribing |
+| `ENCH` | الوسوم | one letter, forever | you, by choosing the letter |
+
+`TOOLS` is the new one and the point of the exercise: before it, the only answer to a bad
+letter was "which row hurts least" plus the burn button. Charges reset each round, so a tool
+is a budget inside the round rather than a permanent edge. Tools that target a row (`ROW_TOOLS`)
+arm `S.aim` and resolve on the next row click; the rest act on the tile in hand.
+
+Relics carry a `hook` field naming where in the loop they fire — `pile` / `hand` / `row` /
+`word` / `seal` / `score` — so the wiring stays findable as the pool grows. The `word` hook is
+the interesting one and the one a word game uniquely has: القَلْب accepts a row whose mirror is
+a word, الشّاذّ accepts two letters, الجَذْر الأعمى treats every root as if it were in your
+notebook. `wordOK()` is the single acceptance test all of them flow through — `stateOf`,
+the seal button, auto-seal and `canAct` must never call `isWord` directly or the relics
+silently stop applying to one of them.
+
+Two old relics were **promoted out of the pool** rather than rewritten. المُعَرِّب (build toward
+the start of the word) is base Arabic — words build right-to-left, and only ever appending was
+an arbitrary restriction — so it is always on. النقطة became a tool, because cycling a letter
+through its dot-family (ب ت ث ن ي) is too good a verb to be a passive you might never be offered.
 
 **Letters are not given invented properties.** Arabic already assigned the one that matters:
 `ZAWAID` (سألتمونيها) marks the ten augment letters that build a وزن onto a root; everything

@@ -12,7 +12,7 @@ import { chromium } from 'playwright';
 
 const RUNS = +(process.argv[2] || 5);
 const MINLEN = +(process.env.MINLEN || 5);
-const STARTER = process.env.STARTER || 'katib';
+const STARTER = process.env.STARTER || 'warraq';
 const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' });
 const reached = [];
 

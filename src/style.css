@@ -265,3 +265,24 @@ button:focus-visible,.line:focus-visible{outline:2px solid var(--ink);outline-of
   .seal{width:58px;height:58px;font-size:13px}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+/* ===== الأدوات — the tool strip =====
+   Tools sit between the board and the marginalia because they are the one thing here the
+   player spends rather than owns. Armed (awaiting a row) is rubric, the colour this page
+   already uses for "the game is waiting on you". */
+.tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center;margin:4px 0 2px}
+.tool{font:inherit;font-size:12px;padding:4px 9px;border:1px solid var(--rule);border-radius:6px;
+  background:transparent;color:var(--ink);cursor:pointer;display:flex;gap:5px;align-items:center;line-height:1}
+.tool small{font-variant-numeric:tabular-nums;opacity:.65;font-size:11px}
+.tool:disabled{opacity:.35;cursor:default}
+.tool.armed{border-color:var(--rubric);color:var(--rubric);box-shadow:inset 0 0 0 1px var(--rubric)}
+.aimlab{font-size:12px;color:var(--rubric)}
+.heldbtn{font:inherit;font-size:11px;margin-top:4px;padding:2px 8px;border:1px dashed var(--rule);
+  border-radius:5px;background:transparent;color:var(--ink);cursor:pointer}
+
+/* ===== character select ===== */
+.card.wide{max-width:min(94vw,560px)}
+.choice.chars button{display:flex;flex-direction:column;gap:5px;text-align:right;padding:11px 13px}
+.choice.chars .rule{color:var(--rubric);font-size:13px;line-height:1.45}
+.choice.chars .why{opacity:.7;font-size:12px;line-height:1.45}
+.choice.chars .stat{font-size:11px;opacity:.55;font-variant-numeric:tabular-nums}
