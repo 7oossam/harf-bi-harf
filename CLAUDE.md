@@ -116,34 +116,33 @@ the run owned at the time. A round read without its target says nothing: crushin
 expected, limping over round six is the run. The question the ratio answers is the one that
 matters — **does the player's power grow in step with the ladder, or fall behind it?**
 
-**A lottery is not a gamble — the distinction that matters most here.** Measured 2026-09-22
-with the two-pile build and `STACK` in place — but WITH the starting affixes that have since
-been removed, so read it as an upper bound on the variance — the MINLEN experiment came back
-*inverted*:
-`MINLEN=3` (seal the bare root) reached round 6 in 1/6 runs, `MINLEN=5` (hold out for زوائد)
-in **0/6**. Holding out is now actively worse. The reason is visible in the round each run
-dies on — `47 72 70 0 74 69 84 36` — against other rounds of `3660 4017 1851 1136`. That is
-not variance, it is two states with nothing between them: either a big word lands and crushes
-the target, or the round yields ~50.
+**The engine works; acquisition is what fails.** First clean sample (2026-09-22, no stalls,
+`MINLEN=3`, وَرّاق, 6 runs) settled the open question, and it retired two of my own wrong
+diagnoses — "it became a lottery" and "player power does not grow":
 
-The cause is that **the player cannot aim at the big word.** You choose the *pile*, not the
-*card*. Closing كتب needs ك then ت then ب and there is no way to call for them, so the root
-closes by lottery and the زيادة is hung on whatever the lottery closed. A gamble is a choice
-with odds you can influence; a lottery is variance you cannot steer. It also explains why
-holding out lost: waiting spends drops and seals on an outcome you have no way to make likelier.
+| run | زوائد owned | score path | reached |
+|---|---|---|---|
+| 1 | **0z** | 226 · 238 · 252 · 196 | round 4 |
+| 2 | **0z** | 168 · 213 · 292 · 249 | round 4 |
+| 3 | **10z** | 247 · 228 · **714** · **971** · **1218** · 742 · 864 · 952 | **cleared all 8** |
+| 5 | **10z** | 234 · 226 · 196 · **830** · 467 | round 6 |
+| 6 | **10z** | 163 · 226 · 195 · **5127** · 1860 · **5088** | round 8 |
 
-The fix is to raise the FLOOR, not lower the spike — cutting `STACK` just returns the two
-strategies to parity, which is the broken state it was introduced to fix. The candidate is a
-face-up market of three أصول to choose from instead of one, so assembling a root becomes a
-plan rather than a prayer. Not yet built.
+Every run that reached ten affix cards survived. Every run that did not died at round 4. Power
+does not fail to grow — it grows *explosively*, 3-20×, the moment زوائد arrive. So the design
+is sound and the failure mode is upstream of it: **a run that does not acquire زوائد early is
+dead, and there is no catch-up.** Both dead runs reached round 4 holding ZERO affix cards
+despite them costing 2 gold.
 
-**Stacking has to jump, not step** (`STACK` in `scoreWord`). Measured with a flat per-affix
-multiplier, sealing a bare root scored as well as holding out for زوائد — **2/6 runs reached
-round 6 either way**, which means the gamble was not a gamble. In the old letter game the same
-experiment gave a decisive gap (99 avg / 0-6 wins vs 410 / 5-6). A زيادة is a bet: it spends a
-card, lengthens the word, and 29% of two-affix stacks are not words at all. So the second
-affix doubles, the third is ×3.5, the fourth ×6. If that gap ever closes again, the gamble is
-broken again — it is the single most important number in the game.
+**Round 4 is therefore a sorting wall, not a difficulty step.** The target jumps 175 → 300
+exactly when the engine has either caught or not: caught runs score ×2.8 to ×17, uncaught ones
+×0.7 and die. Nothing in between, and nothing gradual about it.
+
+The good news inside that: run 3's late rounds read ×1.6, ×1.2, ×1.3 — a *well-tuned* curve.
+The late `TARGETS` are right for an equipped run. So do not retune the ladder to rescue
+unequipped runs; that would flatten a curve that already works. The work is making acquisition
+certain enough that round 4 stops sorting runs into "has an engine" and "has none" —
+guaranteeing زوائد reach the player in the first two shops, not repricing round 4.
 
 **The bag is four roots you can name.** Twelve radical cards, not an alphabet — you know what
 is in there. All four start in your notebook, which is what keeps them yours: twelve radicals
