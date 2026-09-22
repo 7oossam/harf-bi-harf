@@ -156,11 +156,12 @@ function startRound(){
   Object.assign(S,{target:TARGETS[r-1],score:0,drops:S.dropsMax,burns:S.burnsMax,
     lines:[[],[],[],[]],junk:[false,false,false,false],lock:[0,0,0,0],fixed:[0,0,0,0],chain:0,sealedSinceDrop:true,
     rootCounts:{},roundRoots:{},lastEnd:null,ash:0,dropCount:0,log:[],top:[],held:null,freeSeal:isChar('warraq'),
-    radDraw:[],affDraw:[],sel:'r',curR:null,curA:null,nextR:null,nextA:null,seals:sealsFor(),boss:null,wazn:pick(PATTERNS.filter(p=>p.id!=='thulathi')).id,phase:'intro',shop:null,picker:null,nbOffer:null});
+    radDraw:[],affDraw:[],sel:'r',curR:null,curA:null,nextR:null,nextA:null,seals:sealsFor(),boss:null,wazn:'thulathi',phase:'intro',shop:null,picker:null,nbOffer:null});
   if(BOSS_ROUNDS.includes(r)){
     const pool=r===3?['blind','termite','dry']:r===6?['rhyme','barren','rush']:Object.keys(BOSSES);
     S.boss={id:pick(pool)};
   }
+  S.wazn=pickWazn();                       // only ever commission something your cards can build
   const piles=freshPiles(); S.radDraw=piles.rad; S.affDraw=piles.aff;
   S.drops=pileLeft();
   S.charges={}; for(const k of Object.keys(S.tools)) S.charges[k]=TOOLS[k].ch;   // tools recharge every round
@@ -210,6 +211,27 @@ function placed(i,card,atStart=false){
 }
 
 const waznOf=id=>PATTERNS.find(p=>p.id===id)||PATTERNS[0];
+/* Which أوزان your زوائد can actually reach.
+   Hussam, after playing: "whether I can hit the wazn depends on which زوائد I happen to own,
+   so am I buying an affix for the score, or on the CHANCE it fits a required وزن?" — and a
+   commission you cannot build is not a goal, it is a lottery ticket. So the round commissions
+   only what your cards can make. Round one, with no زوائد, commissions ثلاثي — the bare root,
+   which is exactly what you can do — and every زيادة you buy visibly widens the pool it draws
+   from. That is the answer to his question: you buy the affix to OPEN the أوزان. */
+function reachableWazns(){
+  const bySeat=[[],[],[],[]];
+  for(const a of new Set(S.bag.filter(c=>c.k==='a').map(c=>c.a))) bySeat[AFFIX[a].s].push(AFFIX[a].t);
+  const sample=S.roots[0]||'كتب';
+  const out=new Set(['thulathi']);                       // the bare root is always buildable
+  for(const p0 of [null,...bySeat[0]]) for(const p1 of [null,...bySeat[1]])
+  for(const p2 of [null,...bySeat[2]]) for(const p3 of [null,...bySeat[3]]){
+    const w=(p0||'')+sample[0]+(p1||'')+sample[1]+(p2||'')+sample[2]+(p3||'');
+    const core=hasAl(w)?w.slice(2):w;
+    for(const p of PATTERNS) if(p.test(core)) out.add(p.id);
+  }
+  return [...out];
+}
+const pickWazn=()=>{ const r=reachableWazns(), rich=r.filter(id=>id!=='thulathi'); return pick(rich.length?rich:r); };
 /* Which undrawn card would finish this row on the round's commissioned wazn. Recall becomes
    perception: the board remembers the pattern so the player does not have to. */
 function waznHint(i){
@@ -548,46 +570,79 @@ function winRound(){
   S.nbOffer=cands.length?cands:null; S.nbReplace=null;
   S.phase='roundwon'; render();
 }
+/* A root written into the notebook must put its أصول in the bag too — Hussam, after playing,
+   and he is right: a notebook root whose cards you can never draw is a bonus on a word you
+   can never spell again. The notebook and the bag are one thing. */
+function adoptRoot(root){
+  if(S.roots.includes(root)) return;
+  S.roots.push(root);
+  for(const ch of root) S.bag.push({id:uid++,k:'r',ch,root,ench:null});
+  setTimeout(()=>toast(`دخلت أصول <b>${spaced(root)}</b> كيسك`),520);
+}
 function writeRoot(root){
-  if(S.notebook.length<nbSlots()){ S.notebook.push({root,lvl:1,xp:0}); S.nbOffer=null; audio('seal',2); pathFeedback('root'); openShop(); }
+  if(S.notebook.length<nbSlots()){ S.notebook.push({root,lvl:1,xp:0}); adoptRoot(root); S.nbOffer=null; audio('seal',2); pathFeedback('root'); openShop(); }
   else { S.nbReplace=root; render(); }
 }
-function replaceRoot(idx){ S.notebook[idx]={root:S.nbReplace,lvl:1,xp:0}; S.nbReplace=null; S.nbOffer=null; audio('seal',2); pathFeedback('root'); openShop(); }
+function replaceRoot(idx){
+  const gone=S.notebook[idx].root;
+  S.notebook[idx]={root:S.nbReplace,lvl:1,xp:0};
+  adoptRoot(S.nbReplace);
+  /* and the replaced root leaves the bag with it, or the bag only ever grows */
+  S.roots=S.roots.filter(r=>r!==gone);
+  S.bag=S.bag.filter(c=>!(c.k==='r'&&c.root===gone));
+  S.nbReplace=null; S.nbOffer=null; audio('seal',2); pathFeedback('root'); openShop();
+}
 
 /* ================= SHOP ================= */
 function openShop(){ S.phase='shop'; S.shop={offers:genOffers(),reroll:2,removed:false,lead:leadingPath()}; render(); }
 function genOffers(){
+  /* The shop was eight equal text rows — a list, not a choice. Three things fix that, and
+     none of them is more content: FEWER offers so each one weighs something, a RARITY tier so
+     a relic can be an event rather than a line item, and a rotating middle so no two shops
+     read the same. Anything that completes a combo you are one piece from is pulled to the
+     front of its pool; the leading path is the weaker tiebreak behind it. */
   const lead=leadingPath();
-  /* The shop's job is to let you FINISH a build, not to hand you a fresh one every time.
-     Anything that completes a combo you are one piece away from is pulled to the front of
-     its pool; the leading path is the weaker tiebreak behind it. */
   const wants=comboWants();
   const front=(arr,tag)=>{const w=arr.filter(x=>wants.has(tag+':'+x)), r=arr.filter(x=>!wants.has(tag+':'+x)); shuffle(w); shuffle(r); return [...w,...r];};
+  const o:any[]=[];
+
+  /* زوائد — the progression itself, so always two and always cheap */
+  const apool=front(AFFIX_IDS,'affix');
+  o.push({k:'affix',id:apool[0],cost:2});
+  if(apool[1]) o.push({k:'affix',id:apool[1],cost:2});
+
+  /* ONE relic, and it is the shop's event. From round 3 it can come up نادر: dearer, and it
+     reads as a find rather than a line. */
   const pool=Object.keys(RELICS).filter(r=>!S.relics.includes(r));
   const matched=pool.filter(r=>RELICS[r].path===lead), other=pool.filter(r=>RELICS[r].path!==lead);
   shuffle(matched); shuffle(other);
-  const relicPool=front(lead?[...matched,...other]:shuffle(pool),'relic');
-  const o:any[]=relicPool.slice(0,2).map(r=>({k:'relic',id:r,cost:6,path:RELICS[r].path}));
-  /* Two زوائد every shop, at 2 gold. The affix is the progression — the word gets longer
-     because you bought the thing that lengthens it — so it has to be the cheap, frequent
-     purchase, with relics as the expensive rare ones. Measured before this: the run reached
-     round 4 owning ONE affix card while the target had tripled, so scores stayed flat at
-     ~250 and the score/target ratio decayed 2.5 → 1.4 → 1.3 → 0.9 → 0.6 in every run. */
-  const apool=front(AFFIX_IDS,'affix');
-  o.push({k:'affix',id:apool[0],cost:2});
-  o.push({k:'affix',id:apool[1]||apool[0],cost:2});
-  if(has('khamis')&&S.roots.length<6) o.push({k:'root',id:pick(fertileRoots(60).filter(r=>!S.roots.includes(r)).slice(0,40)),cost:7});
-  const rid=front(Object.keys(ROWMODS),'row')[0];
-  o.push({k:'row',id:rid,cost:4,path:ROWMODS[rid].path});
-  const wantNb=lead==='root'||(lead!=='pattern'&&Math.random()<.5&&S.notebook.length);
-  if(wantNb&&S.notebook.length){ o.push({k:'nbup',root:pick(S.notebook).root,cost:3,path:'root'}); }
-  else o.push({k:'patup',id:pick(PATTERNS.filter(p=>p.id!=='thulathi')).id,cost:3,path:'pattern'});
-  o.push({k:'ench',id:front(Object.keys(ENCH),'mark')[0],cost:4,path:'bag'});
-  /* a tool you do not own yet — agency is worth a slot of its own every shop */
+  const rpool=front(lead?[...matched,...other]:shuffle(pool),'relic');
+  if(rpool.length){
+    const rare=S.round>=3&&Math.random()<.35;
+    o.push({k:'relic',id:rpool[0],cost:rare?9:6,path:RELICS[rpool[0]].path,rare});
+  }
+
+  /* two of the three run-shaping slots, rotated — the shop is never the same shop twice */
+  const slot:any[]=[];
   const tpool=front(Object.keys(TOOLS).filter(t=>!S.tools[t]),'tool');
-  if(tpool.length) o.push({k:'tool',id:tpool[0],cost:5});
+  if(tpool.length) slot.push({k:'tool',id:tpool[0],cost:5});
+  const rid=front(Object.keys(ROWMODS),'row')[0];
+  slot.push({k:'row',id:rid,cost:4,path:ROWMODS[rid].path});
+  slot.push({k:'ench',id:front(Object.keys(ENCH),'mark')[0],cost:4,path:'bag'});
+  shuffle(slot); o.push(...slot.slice(0,2));
+
+  /* a root you can adopt — its three أصول join your bag, so it is a bag decision now */
+  const rootPool=fertileRoots(60).filter(r=>!S.roots.includes(r));
+  if(rootPool.length&&(S.round>=2||has('khamis'))) o.push({k:'root',id:pick(rootPool.slice(0,60)),cost:7});
+
+  /* one cheap level-up, so there is always something affordable, and a patup only on a
+     وزن you can actually build */
+  const reach=reachableWazns().filter(x=>x!=='thulathi');
+  if(S.notebook.length&&(lead==='root'||!reach.length||Math.random()<.5)) o.push({k:'nbup',root:pick(S.notebook).root,cost:3,path:'root'});
+  else if(reach.length) o.push({k:'patup',id:pick(reach),cost:3,path:'pattern'});
   return o;
 }
+
 
 function buy(idx){
   const o=S.shop.offers[idx]; if(!o||o.sold||S.gold<o.cost) return;
@@ -602,7 +657,7 @@ function buy(idx){
     pay(o); pathFeedback('pattern');
     toast(`<b>${AFFIX[o.id].n} «${AFFIX[o.id].t}»</b> — ${AFFIX[o.id].d}`);
   }
-  else if(o.k==='root'){ S.roots.push(o.id); for(const ch of o.id) S.bag.push({id:uid++,k:'r',ch,root:o.id,ench:null}); if(S.notebook.length<nbSlots()) S.notebook.push({root:o.id,lvl:1,xp:0}); pay(o); pathFeedback('root'); toast(`دخل الجذر <b>${spaced(o.id)}</b> كيسك`); }
+  else if(o.k==='root'){ adoptRoot(o.id); if(S.notebook.length<nbSlots()) S.notebook.push({root:o.id,lvl:1,xp:0}); pay(o); pathFeedback('root'); }
   else if(o.k==='row') S.picker={mode:'row',mod:o.id,idx};
   else if(o.k==='tool'){ S.tools[o.id]=1; S.charges[o.id]=TOOLS[o.id].ch; pay(o); toast(`<b>${TOOLS[o.id].n}</b> — ${TOOLS[o.id].d}`); }
   audio('drop'); comboCheck(); render();
@@ -832,7 +887,7 @@ function renderOverlay(){
 }
 function offerHTML(x,i){
   let kind,nm,ds,cls='';
-  if(x.k==='relic'){kind='طلسم';nm=RELICS[x.id].n;ds=RELICS[x.id].d;cls='k-relic';}
+  if(x.k==='relic'){kind=x.rare?'طلسم نادر':'طلسم';nm=RELICS[x.id].n;ds=RELICS[x.id].d;cls='k-relic'+(x.rare?' rare':'');}
   else if(x.k==='ench'){kind='نقش حرف';nm='حرف '+ENCH[x.id].n;ds=ENCH[x.id].d+' تختار الحرف من كيسك.';}
   else if(x.k==='tool'){kind='أداة';nm=TOOLS[x.id].n;ds=TOOLS[x.id].d+` · ${TOOLS[x.id].ch} شحنات تتجدد كل جولة.`;}
   else if(x.k==='affix'){const a=AFFIX[x.id];kind='زيادة';nm=a.n+' «'+a.t+'»';ds=a.d+` · تُوضع ${SEATS[a.s]}.`;cls='k-aff';}

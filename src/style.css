@@ -338,3 +338,9 @@ button:focus-visible,.line:focus-visible{outline:2px solid var(--ink);outline-of
 .pilecard .plabel{font-size:10px;color:var(--ink2);font-variant-numeric:tabular-nums;letter-spacing:0}
 .pilecard .pnext{opacity:.55;transform:scale(.8)}
 .handnote{font-size:12px;color:var(--ink2);text-align:center;min-width:90px;align-self:center}
+
+/* a rare relic should read as a find, not a line item — ochre is this page's "something
+   completes" colour, so it is the right one to spend here */
+.offer.rare{border-color:var(--seal);box-shadow:inset 0 0 0 1px var(--seal)}
+.offer.rare .kind{color:var(--seal);font-weight:700;letter-spacing:.3px}
+.offer.k-root .nm{font-family:var(--naskh);font-size:20px;letter-spacing:2px}
