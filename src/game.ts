@@ -77,11 +77,11 @@ function radAlive(L){
    wrong", and he is right; a permanent affix is an upgrade you buy once and forget, while a
    spent one asks the seal-budget question every time: is THIS word worth my «ال»? */
 const freshPiles=()=>{
-  const n=COPIES+(has('khabiya')?1:0);
+  const n=COPIES;
   const barren=S.boss&&S.boss.id==='barren';
   const rad=[], aff=[];
   for(const c of S.bag){
-    if(c.k==='a'){ if(!barren) aff.push(c.id); }          // القحط: no زوائد fall this round
+    if(c.k==='a'){ if(!barren&&!has('samt')) aff.push(c.id); }   // القحط / الصَّمت: no زوائد fall
     else for(let i=0;i<n;i++) rad.push(c.id);
   }
   return {rad:shuffle(rad),aff:shuffle(aff)};
@@ -95,6 +95,7 @@ const pileLeft=()=>S.radDraw.length+S.affDraw.length+S.top.length;
    BAG — they do not come back next round, or ever. التَّضعيف spares the first one in a row and
    طَليق spares its card entirely, which is what makes both worth owning now. */
 function consumeAffixes(tiles){
+  if(has('naht')){ S.gold=Math.max(0,S.gold-2); return; }   // nothing spends; the seal costs coin
   let spared=!has('tadeef');
   for(const c of tiles){
     if(c.k!=='a'||!c.id) continue;
@@ -169,7 +170,7 @@ function startRound(){
   const r=S.round;
   Object.assign(S,{target:TARGETS[r-1],score:0,drops:S.dropsMax,burns:S.burnsMax,
     lines:[[],[],[],[]],junk:[false,false,false,false],lock:[0,0,0,0],fixed:[0,0,0,0],chain:0,sealedSinceDrop:true,
-    rootCounts:{},roundRoots:{},lastEnd:null,ash:0,dropCount:0,log:[],top:[],held:null,freeSeal:isChar('warraq'),
+    rootCounts:{},roundRoots:{},lastEnd:null,lastRoot:null,mirajN:0,ash:0,dropCount:0,log:[],top:[],held:null,freeSeal:isChar('warraq'),
     radDraw:[],affDraw:[],sel:'r',curR:null,curA:null,nextR:null,nextA:null,seals:sealsFor(),boss:null,wazn:'thulathi',phase:'intro',shop:null,picker:null,nbOffer:null});
   if(BOSS_ROUNDS.includes(r)){
     const pool=r===3?['blind','termite','dry']:r===6?['rhyme','barren','rush']:Object.keys(BOSSES);
@@ -207,6 +208,17 @@ function syncHand(){
   S.cur=S.sel==='a'?S.curA:S.curR;
   S.next=S.sel==='a'?S.nextA:S.nextR;
 }
+/* الكَشْف — the زوائد stop being a queue and become a hand. You name the زيادة you want and
+   it comes to the top, which turns "which وزن can I reach" from a draw into a decision. */
+function pickAffix(a){
+  if(S.phase!=='play'||!has('kashf')) return;
+  const k=S.affDraw.findIndex(id=>{const c=S.bag.find(b=>b.id===id); return c&&c.a===a;});
+  if(k<0){ toast('لم يبق من هذه الزيادة شيء'); return; }
+  const id=S.affDraw.splice(k,1)[0];
+  if(S.curA) S.affDraw.push(S.curA.id);
+  S.curA={...S.bag.find(b=>b.id===id)};
+  S.sel='a'; syncHand(); audio('drop'); render();
+}
 function selectPile(k){
   if(S.phase!=='play') return;
   if(k==='a'&&!S.curA){ toast('كومة الزوائد فارغة'); return; }
@@ -215,6 +227,9 @@ function selectPile(k){
 }
 const lineStr=i=>asmLine(S.lines[i]);
 const wordOK=w=>isWord(w);
+/* الارتجال drops the dictionary: a real ROOT with anything hung on it is accepted, and paid
+   half. This is the biggest rule a relic can rewrite here — the lexicon stops being the wall. */
+const sealable=L=>nRad(L)>=3&&!!rootFound(L)&&(isWord(asmLine(L))||has('irtijal'));
 
 /* Where the incoming card would go. A radical always appends (or prepends, with the start
    zone); an affix takes its printed seat unless المُلحَق frees it. */
@@ -234,7 +249,7 @@ const waznOf=id=>PATTERNS.find(p=>p.id===id)||PATTERNS[0];
    from. That is the answer to his question: you buy the affix to OPEN the أوزان. */
 function reachableWazns(){
   const bySeat=[[],[],[],[]];
-  for(const a of new Set(S.bag.filter(c=>c.k==='a').map(c=>c.a))) bySeat[AFFIX[a].s].push(AFFIX[a].t);
+  for(const a of [...new Set(S.bag.filter(c=>c.k==='a').map(c=>c.a))] as string[]) bySeat[AFFIX[a].s].push(AFFIX[a].t);
   const sample=S.roots[0]||'كتب';
   const out=new Set(['thulathi']);                       // the bare root is always buildable
   for(const p0 of [null,...bySeat[0]]) for(const p1 of [null,...bySeat[1]])
@@ -291,7 +306,7 @@ function stateOf(i,card,atStart=false){
   if(isRad(card)&&nRad(S.lines[i])>=RADMAX()) return 'full';
   if(!isRad(card)&&!seatFree(S.lines[i],card,atStart?0:null)) return 'seat';
   const L2=placed(i,card,atStart);
-  if(nRad(L2)>=3&&rootFound(L2)&&isWord(asmLine(L2))) return 'word';
+  if(sealable(L2)) return 'word';
   if(!radAlive(L2)) return 'dead';
   return 'alive';
 }
@@ -353,6 +368,10 @@ function scoreWord(tiles,s,row){
   if(S.permMult>0){ mult+=S.permMult; tags.push('دائم +'+fmt(S.permMult)); }
   if(root){const prev=S.rootCounts[root]||0; if(prev>0){x*=(1+prev); tags.push('رنين ×'+(1+prev));}}
   if(has('ishtiqaq')&&root&&S.roundRoots[root]){ x*=2; tags.push('اشتقاق ×٢'); }
+  if(has('miraj')&&root&&root===S.lastRoot){ const m=2**Math.min(6,(S.mirajN||0)+1); x*=m; tags.push('مِعراج ×'+m); }
+  if(has('samt')&&!naff){ x*=6; tags.push('الصَّمت ×٦'); }
+  if(has('irtijal')&&!isWord(s)){ x*=.5; tags.push('ارتجال ×½'); }
+  if(has('qalib')&&p&&p.id===S.wazn){ x*=5; tags.push('القالَب ×٥'); }
   if(isChar('hakim')&&len>=5){ x*=2; tags.push('الحكيم ×٢'); }
 
   const bagFlavor=tiles.some(c=>c.ench)||S.roots.length<=3, pctx={nb,p,naff,chain:S.chain,bagFlavor};
@@ -386,7 +405,7 @@ function canAct(){
   const hand=[S.curR,S.curA].filter(Boolean);
   for(let i=0;i<nLines();i++){
     if(S.junk[i]) return true;                                  // junk takes the drop, and wipes for scrap
-    if(S.seals>0&&nRad(S.lines[i])>=3&&rootFound(S.lines[i])&&isWord(lineStr(i))) return true;
+    if(S.seals>0&&sealable(S.lines[i])) return true;
     if(S.lock[i]>0) continue;
     for(const c of hand)
       if(isRad(c)?nRad(S.lines[i])<RADMAX():seatFree(S.lines[i],c,null)) return true;
@@ -526,16 +545,20 @@ function seal(i,auto){
     return afterSeal(auto);
   }
   if(S.seals<=0){ toast('لم يبق لك ختم في هذه الجولة'); return; }
-  if(nRad(tiles)<3||!rootFound(tiles)||!isWord(s)) return;
+  if(!sealable(tiles)) return;
+  if(has('qalib')&&patOf(s)?.id!==S.wazn){ toast(`القالَب لا يختم إلا على وزن ${waznOf(S.wazn).n}`); return; }
   const r=scoreWord(tiles,s,i);
   S.score+=r.score; S.stats.words++; S.stats.total+=r.score;
   if(!S.stats.best||r.score>S.stats.best.score) S.stats.best={w:displayOf(s),score:r.score};
   if(r.root){
+    if(has('shajara')&&!S.seenRoots[r.root]&&!S.roots.includes(r.root)&&S.roots.length<8) adoptRoot(r.root);
     S.rootCounts[r.root]=(S.rootCounts[r.root]||0)+1; S.roundRoots[r.root]=(S.roundRoots[r.root]||0)+1; S.seenRoots[r.root]=1;
     const nb=nbOf(r.root);
     if(nb){ nb.xp+=has('mihbara')?2:1; if(nb.xp>=3){nb.xp-=3; nb.lvl++; setTimeout(()=>toast(`ارتقى الجذر <b>${spaced(nb.root)}</b> إلى المستوى ${nb.lvl}`),700);} }
   }
   if(has('jami')&&r.pat&&!S.seenPatterns[r.pat]){ S.seenPatterns[r.pat]=1; S.permMult+=.5; setTimeout(()=>toast('جامع الأوزان: أول كلمة على وزن جديد · +٠٫٥ مضاعف دائم'),650); }
+  if(has('miraj')){ S.mirajN=(r.root&&r.root===S.lastRoot)?Math.min(6,(S.mirajN||0)+1):0; }
+  S.lastRoot=r.root||null;
   S.chain++; S.stats.maxChain=Math.max(S.stats.maxChain||0,S.chain); S.sealedSinceDrop=true; S.lastEnd=s[s.length-1];
   if(S.rowMods[i]==='gold') S.gold+=3;
   if(isChar('tajir')&&r.naff){ S.gold+=r.naff; floatAt(i,{good:true,text:`التاجر +${r.naff} دينار`}); }
@@ -550,13 +573,17 @@ function seal(i,auto){
   if(has('misann')) for(const k of Object.keys(S.tools)) S.charges[k]=Math.min(TOOLS[k].ch,(S.charges[k]||0)+1);
   S.drops=pileLeft()+(S.curR?1:0)+(S.curA?1:0);
   if(gone) floatAt(i,{bad:true,text:`أُنفق ${gone} من حروف الجولة`});
-  S.lines[i]=[]; fx={line:i,kind:'sealed'};
+  /* التَّصريف — the root stays in its row and only the زوائد are spent, so one جذر can be
+     conjugated again and again: كتب ← كاتب ← مكتوب ← كتاب. The most run-changing relic in
+     the pool, and the most Arabic thing the game does. */
+  S.lines[i]=has('tasrif')?tiles.filter(isRad).map(c=>({...c})):[];
+  fx={line:i,kind:'sealed'};
   if(S.rowMods[i]==='echo') S.lines[i]=[{id:null,ch:s[s.length-1],ench:null}];
   if(S.boss&&S.boss.id==='dry') S.lock[i]=1;
   S.log.unshift({w:displayOf(s),sc:r.score}); S.log=S.log.slice(0,6);
   floatAt(i,{score:r.score,eq:r.chips+' × '+fmt(r.mult),tags:r.tags});
   audio('seal',S.chain); try{navigator.vibrate&&navigator.vibrate(18)}catch(e){}
-  if(has('khayt')) for(let k=0;k<nLines();k++){ if(k!==i&&!S.junk[k]&&S.lines[k].length>=2&&wordOK(lineStr(k))){ seal(k,true); if(S.phase!=='play') return; } }
+  if(has('khayt')) for(let k=0;k<nLines();k++){ if(k!==i&&!S.junk[k]&&sealable(S.lines[k])){ seal(k,true); if(S.phase!=='play') return; } }
   afterSeal(auto);
 }
 function afterSeal(auto){
@@ -568,7 +595,7 @@ function endOfDrops(){
   const n=nLines(); let k=0;
   const step=()=>{
     if(S.phase!=='ending') return;
-    while(k<n&&!(S.seals>0&&S.lines[k].length>=2&&!S.junk[k]&&wordOK(lineStr(k)))) k++;
+    while(k<n&&!(S.seals>0&&!S.junk[k]&&sealable(S.lines[k]))) k++;
     if(k<n){ S.phase='play'; seal(k,true); if(S.phase==='play') S.phase='ending'; render(); k++; setTimeout(step,450); return; }
     if(S.score>=S.target){S.phase='won'; render(); setTimeout(winRound,700);} else { S.phase='over'; audio('lose'); render(); }
   };
@@ -633,9 +660,15 @@ function genOffers(){
   const matched=pool.filter(r=>RELICS[r].path===lead), other=pool.filter(r=>RELICS[r].path!==lead);
   shuffle(matched); shuffle(other);
   const rpool=front(lead?[...matched,...other]:shuffle(pool),'relic');
+  /* The rare tier IS the run-changers (`rare` in RELICS), not a random price bump. From round
+     2 one of them can surface: dearer, gold-framed, and it rewrites a rule rather than adding
+     a number — التَّصريف leaves the root standing, الصَّمت bans زوائد and pays ×6 for bare roots,
+     القالَب will only seal the round's وزن and pays ×5 for it. */
   if(rpool.length){
-    const rare=S.round>=3&&Math.random()<.35;
-    o.push({k:'relic',id:rpool[0],cost:rare?9:6,path:RELICS[rpool[0]].path,rare});
+    const breakers=rpool.filter(r=>RELICS[r].rare), plain=rpool.filter(r=>!RELICS[r].rare);
+    const wantRare=S.round>=2&&breakers.length&&Math.random()<.45;
+    const id=wantRare?breakers[0]:(plain[0]||rpool[0]);
+    o.push({k:'relic',id,cost:RELICS[id].rare?10:6,path:RELICS[id].path,rare:!!RELICS[id].rare});
   }
 
   /* two of the three run-shaping slots, rotated — the shop is never the same shop twice */
@@ -747,7 +780,7 @@ function render(){
   for(let i=0;i<n;i++){
     const L=S.lines[i], s=asmLine(L), junk=S.junk[i];
     const hint=S.phase==='play'?hintFor(i,S.cur,false):null;
-    const ok=!junk&&nRad(L)>=3&&!!rootFound(L)&&isWord(s);
+    const ok=!junk&&sealable(L)&&(!has('qalib')||patOf(s)?.id===S.wazn);
     const fxc=fx.line===i?(fx.kind==='crack'?'cracked':fx.kind==='sealed'?'sealed':''):'';
     let rootl='';
     if(ok){ const r=rootOf(s), p=patOf(s), nb=nbOf(r), c=r?S.rootCounts[r]||0:0;
@@ -784,6 +817,7 @@ function render(){
         ${hideNext?'':`<span class="pnext">${tileHTML(S.nextR,'small')}</span>`}
       </button>
       <button class="pilecard ${S.sel==='a'?'on':''}" data-sel="a" ${S.curA?'':'disabled'}>
+        ${has('kashf')?'<span class="kashfmark">كَشْف</span>':''}
         ${tileHTML(S.curA,'big')}
         <span class="plabel ${S.affDraw.length<=2?'low':''}">ذخيرة الزوائد · ${S.affDraw.length}</span>
         ${hideNext?'':`<span class="pnext">${tileHTML(S.nextA,'small')}</span>`}
@@ -795,6 +829,10 @@ function render(){
       ${S.held?`<button class="heldbtn" data-tool="kaff">في الكَفّ: ${cardTxt(S.held)}</button>`:''}
     </div>
   </div>
+  ${has('kashf')&&S.affDraw.length?`<div class="kashf">${
+    ([...new Set(S.affDraw.map(id=>{const c=S.bag.find(b=>b.id===id); return c&&c.a;}).filter(Boolean))] as string[])
+      .map(a=>`<button class="kcard ${S.curA&&S.curA.a===a?'on':''}" data-kashf="${a}">${AFFIX[a].t}<small>${SEATS[AFFIX[a].s]}</small></button>`).join('')
+  }</div>`:''}
   ${Object.keys(S.tools).length?`<div class="tools">${Object.keys(S.tools).map(t=>{
     const c=S.charges[t]||0, armed=S.aim===t;
     return `<button class="tool ${armed?'armed':''}" data-tool="${t}" ${c<=0||S.phase!=='play'?'disabled':''}>${TOOLS[t].n}<small>${c}</small></button>`;
@@ -959,7 +997,7 @@ function audio(kind,lvl=0){
 
 let prevPhase='play';
 document.addEventListener('click',e=>{
-  const b=e.target.closest('[data-seal],[data-act],[data-buy],[data-pick],[data-relic],[data-mod],[data-start],[data-line],[data-starter],[data-write],[data-replace],[data-row],[data-path],[data-tool],[data-char],[data-combo],[data-sel]');
+  const b=e.target.closest('[data-seal],[data-act],[data-buy],[data-pick],[data-relic],[data-mod],[data-start],[data-line],[data-starter],[data-write],[data-replace],[data-row],[data-path],[data-tool],[data-char],[data-combo],[data-sel],[data-kashf]');
   if(!b||!S) return;
   const D=b.dataset;
   if(D.seal!=null) return seal(+D.seal);
@@ -971,6 +1009,7 @@ document.addEventListener('click',e=>{
   if(D.write) return writeRoot(D.write);
   if(D.replace!=null) return replaceRoot(+D.replace);
   if(D.relic){ const r=RELICS[D.relic]; return toast(`<b>${r.n}</b> — ${r.d}`); }
+  if(D.kashf) return pickAffix(D.kashf);
   if(D.sel) return selectPile(D.sel);
   if(D.tool) return useTool(D.tool);
   if(D.combo){ const c=COMBOS.find(x=>x.n===D.combo); return toast(`<b>⁂ ${c.n}</b> — ${c.d}`); }
@@ -1010,6 +1049,14 @@ function start(data){
   else { S={phase:'title',mute:false}; }
   render(); renderOverlay(); resetTimer();
 }
+/* A test hook, behind ?dev=1 only. Granting a relic is otherwise a whole run of shopping,
+   which made it impossible to check that a rule-changing relic actually changes its rule —
+   the first attempt "verified" eight of them without granting a single one. */
+if(location.search.includes('dev=1')) (window as any).__dev={
+  grant:(...ids)=>{ for(const id of ids) if(RELICS[id]&&!S.relics.includes(id)) S.relics.push(id); render(); },
+  give:(a,n=6)=>{ for(let i=0;i<n;i++) S.bag.push({id:uid++,k:'a',a,ench:null}); render(); },
+  state:()=>S,
+};
 loadDict().then(()=>{
   if(window.claude?.hot?.snapshot) window.claude.hot.snapshot(()=>({state:S}));
   window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});

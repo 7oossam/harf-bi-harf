@@ -102,6 +102,37 @@ What replaces it is better than neutral: every turn you choose between advancing
 lengthening the word, with the randomness living inside each pile. `S.cur` stays synced to the
 selected card so drop/stateOf/scoring never need to know about piles.
 
+**A relic must rewrite a rule, not add a number.** Hussam, after playing: "I don't mean the
+shop's shape, I mean its CONTENT — the relics, marks, rows and tools are mostly boring and
+don't excite or change the game at all." He was right, and the failure was mine: the research
+at the top of this project found that a good relic *pushes you somewhere* (Dead Branch does
+not add damage, it makes exhausting cards a strategy), and then I wrote 29 relics of which
+half were `+2 burns`, `see 2 cards ahead`, `+0.5 mult` — the exact modifiers I had diagnosed.
+
+So the pool is now built around eight **كاسرات** (`rare: 1` in `RELICS`), each of which
+rewrites a rule of the loop. The bar is that owning one should make a player say *"wait, now
+I can…"*:
+
+| relic | the rule it rewrites |
+|---|---|
+| **التَّصريف** | the seal spends the زوائد and LEAVES the root standing — conjugate one جذر over and over |
+| **الارتجال** | the dictionary stops being the wall: any assembly on a real root counts, at half score |
+| **القالَب** | you may only seal the round's وزن — and it pays ×5 |
+| **المِعراج** | consecutive seals on the same root compound: ×2, ×4, ×8… |
+| **الكَشْف** | the زوائد stop being a queue and become a hand you pick from |
+| **الصَّمت** | no زوائد fall at all, and the bare root pays ×6 |
+| **النَّحت** | زوائد are never consumed, but every seal costs 2 gold |
+| **الشَّجرة** | every new root you seal joins your bag with its three أصول |
+
+Verified with the `?dev=1` hook: التَّصريف scored **4718** and الصَّمت **2147** against a ~400
+baseline, and the row log shows `"سخر" 3/3→3/3` — the root staying put, which is the whole
+point. The rare tier in `genOffers` is bound to these, so a "rare" offer is a rule-changer and
+not a price bump.
+
+**`?dev=1` exposes `window.__dev`** (`grant`, `give`, `state`). Granting a relic is otherwise a
+whole run of shopping, and the first attempt to verify these eight "passed" all of them without
+granting a single one — the rows behaved identically and I nearly believed it.
+
 **زوائد are ammunition, not upgrades.** Hussam, after playing: "affix cards, once bought, are
 unlimited — I expect that is wrong." So أصول and زوائد are now economically different things,
 which is also what they are linguistically:
