@@ -169,14 +169,37 @@ letters still undrawn and tells a row which one would finish it on that wazn —
 perception, so the player never has to memorise the eleven templates.
 
 **Known gaps — the next work:**
-- Round targets past round 1 are still guesses.
+- Round targets for the non-boss rounds past round 4 are still lightly measured.
 - Path level thresholds (`pathLvl`: level = floor(progress/3), cap 5) and the +15%/level bonus
   are first-pass numbers.
 
-When changing scoring, re-run `tools/bot.mjs` before trusting the numbers. Measured 2026-09-21
-after the rebalance: sealing as soon as a word exists (`MINLEN=0`) averages 99 and wins 0/6
-round ones; holding out for 5+ letters (`MINLEN=5`) averages 410 and wins 5/6. Pushing should
-stay clearly ahead — if that gap closes, the gamble is broken again.
+When changing scoring, re-run `tools/bot.mjs` before trusting the numbers — and read the
+stall line first. **Every "balance problem" measured in this project so far has turned out to
+be a bug wearing balance's clothes**, so the first question is never "are the targets wrong",
+it is "is the thing I am measuring even working":
+
+- the bot deadlocked on full rows (`h-dead` is a legal move, `h-full` is not) and reported
+  frozen runs as "reached round 3" — three of six runs, every number polluted;
+- the round could freeze forever when every row refused the tile and burns were spent;
+- `floatAt` threw inside `seal()`, aborting it before `S.lines[i]=[]`, so the same row could
+  be sealed repeatedly for score — which read as "the new content is far too strong" (6/6
+  clears, round-8 scores of 7395) and was a scoring exploit.
+
+`tools/bot.mjs` now reports `BOT STALLED` and drops that run from the denominator rather than
+counting it as progress. A run that hits the iteration cap is not a result.
+
+Measured 2026-09-22, clean instrument, `MINLEN=5`, starter وَرّاق, 8 runs:
+- before re-costing bosses: **1/8** reached round 6, and **six of eight died at round 3** —
+  median round 2 ≈ 296 against target 150, median round 3 ≈ 166 against target 210.
+- after: **3/8** reached round 6, deaths spread across rounds 2/3/5/6 with only one at round 3.
+  Spread beats a cliff; that is the shape to preserve.
+
+The bot is a deliberately poor player — it seals greedily at 5+ letters and buys the first
+affordable offer — so treat it as an unskilled floor, not a target. One artifact to know about:
+the starting bag is exactly `BAG_CAP`, so every letter purchase is a forced swap, and the bot
+replaces the first tile in the bag. It routinely guts its own ا or ل, which is what the
+occasional `r1:966 → r2:116` collapse is. That is a choice for a human and noise for the bot —
+do not balance against it.
 
 ## Conventions
 
