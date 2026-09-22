@@ -342,10 +342,18 @@ let fx={line:null,kind:null};
    the round can never leave on its own. Rather than freeze, end the round. */
 function canAct(){
   if(S.burns>0) return true;
+  /* BOTH face-up cards count, not just the selected one. The player can switch piles for
+     free, so an affix whose seat is taken everywhere is not a dead end — it is a reason to
+     take an أصل instead. Checking only S.cur ended rounds that had perfectly legal moves
+     available on the other pile: measured, whole rounds scored 0 while the run held 22 affix
+     cards. This guard was written when there was one card in hand. */
+  const hand=[S.curR,S.curA].filter(Boolean);
   for(let i=0;i<nLines();i++){
     if(S.junk[i]) return true;                                  // junk takes the drop, and wipes for scrap
-    if(S.lock[i]<=0&&(isRad(S.cur)?nRad(S.lines[i])<RADMAX():seatFree(S.lines[i],S.cur,null))) return true;
     if(S.seals>0&&nRad(S.lines[i])>=3&&rootFound(S.lines[i])&&isWord(lineStr(i))) return true;
+    if(S.lock[i]>0) continue;
+    for(const c of hand)
+      if(isRad(c)?nRad(S.lines[i])<RADMAX():seatFree(S.lines[i],c,null)) return true;
   }
   return false;
 }
